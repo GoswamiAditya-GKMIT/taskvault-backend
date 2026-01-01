@@ -1,0 +1,25 @@
+
+__pycache__/
+*.pyd
+
+
+.venv/
+venv/
+env/
+/bin/
+/include/
+/lib/
+/share/
+
+*.sqlite3
+/db.sqlite3
+
+.env
+
+*.pid
+*.sock
+
+.DS_Store # macOS files
+.vscode/  # VS Code config (if project specific)
+
+.pytest_cache/
