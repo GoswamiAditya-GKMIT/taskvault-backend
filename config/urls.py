@@ -24,3 +24,5 @@ urlpatterns = [
     path('api/', include('users.urls')),
     path('api/', include('tasks.urls')),
 ]
+
+handler404 = "core.exceptions.custom_404_handler"
