@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.exceptions import PermissionDenied
 
 
-from users.serializers.user_serializers import (
+from users.serializers.user import (
     UserListDetailSerializer,
     UserUpdateSerializer,
 )
@@ -44,22 +44,6 @@ class UserListAPIView(APIView):
         return Response(response_data, status=status.HTTP_200_OK)
 
 
-class UserMeAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        serializer = UserListDetailSerializer(request.user)
-        return Response(
-            {
-                "status": "success",
-                "message": "Profile retrieved successfully",
-                "data": serializer.data,
-            },
-            status=status.HTTP_200_OK,
-        )
-
-
-    
 class UserDetailUpdateDeleteAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -117,6 +101,10 @@ class UserDetailUpdateDeleteAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+    
+    #To do - in future - admin can restore the user and all its attributes including the tasks and all
+            # or admin can allow to remove the user (hard delete) and recreate the new user 
+            # or can just use patch and remove all the associated item and pretend to be use the same existing user 
 
     def delete(self, request, id):
         request_user = request.user

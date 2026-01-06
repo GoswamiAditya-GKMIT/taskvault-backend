@@ -3,6 +3,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError , InvalidToken
 from django.contrib.auth import authenticate , get_user_model
+from django.contrib.auth.hashers import check_password
 
 User = get_user_model()
 
@@ -102,21 +103,27 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only = True)
 
     def validate(self, attrs):
-        user = authenticate(
-            username = attrs["username"],
-            password = attrs["password"]
+        username = attrs["username"]
+        password = attrs["password"]
 
-        )
-
-        if not user :
-            raise serializers.ValidationError(
-                "Invalid username or password"
-            )
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Invalid username or password")
+            
+        if not check_password(password, user.password):
+            raise serializers.ValidationError("Invalid username or password")
+        
         if user.deleted_at:
             raise serializers.ValidationError(
-                "User account is deleted."        # todo: admin can have access to re-actviate the account 
+                "User account is deleted. Contact admin to re-activate the account."
             )
-    
+
+        if not user.is_active:
+            raise serializers.ValidationError(
+                "User account is temporary inactive. Do contact admin to re-activate the account."
+            )
+        
         attrs["user"] = user
         return attrs
     

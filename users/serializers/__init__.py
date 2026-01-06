@@ -1,2 +1,2 @@
-from .auth_serializers import *
-from .user_serializers import *
+from .auth import *
+from .user import *

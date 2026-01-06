@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from core.choices import UserRoleChoices
 
 User = get_user_model()
 class UserListDetailSerializer(serializers.Serializer):
@@ -24,6 +25,7 @@ class UserMiniDetailSerializer(serializers.Serializer):
 class UserUpdateSerializer(serializers.Serializer):
     first_name = serializers.CharField(required=False, max_length=150)
     last_name = serializers.CharField(required=False, max_length=150)
+    is_active = serializers.BooleanField(required=False)
 
     def validate_first_name(self, value):
         if not value.isalpha():
@@ -44,7 +46,22 @@ class UserUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "At least one field must be provided for update."
             )
-
+    
+        request_user = self.context.get("request_user")
+        
+        if "is_active" in attrs:
+            # If the user is NOT an Admin, they cannot change is_active.
+            if request_user and request_user.role != UserRoleChoices.ADMIN:
+                
+                # Check 1: Prevent changing the value
+                if getattr(self.instance, 'is_active') != attrs['is_active']:
+                    raise serializers.ValidationError({
+                        "is_active": ["Only administrators can modify the 'is_active' status."]
+                    })
+                
+                # If they tried to change it to the same value, we still remove it
+                # to prevent redundant checks.
+                attrs.pop("is_active")
         instance = self.instance
 
         changes = False
