@@ -8,21 +8,20 @@ from rest_framework.exceptions import PermissionDenied
 from core.choices import UserRoleChoices
 from core.pagination import DefaultPagination
 from tasks.models import Task, TaskHistory
-from tasks.serializers.history_serializers import TaskHistorySerializer
+from tasks.serializers.history import TaskHistorySerializer
+from core.permissions import CanViewTaskHistory
 
 
 class TaskHistoryListAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanViewTaskHistory]
 
     def get(self, request, task_id):
-        user = request.user
-
         task = get_object_or_404(Task, id=task_id, deleted_at__isnull=True)
 
-        if user.role != UserRoleChoices.ADMIN and task.assignee != user:
-            raise PermissionDenied("You do not have permission to view task history.")
+        # object-level permission
+        self.check_object_permissions(request, task)
 
-        queryset = TaskHistory.objects.filter(task=task)
+        queryset = TaskHistory.objects.filter(task=task).order_by("-created_at")
 
         paginator = DefaultPagination()
         page = paginator.paginate_queryset(queryset, request)

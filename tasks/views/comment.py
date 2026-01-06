@@ -8,24 +8,25 @@ from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 
+
 from tasks.models import Task, Comment
-from tasks.serializers.comment_serializers import (
+from tasks.serializers.comment import (
     CommentCreateUpdateSerializer,
     CommentDetailSerializer
 )
-from core.permissions import CommentOnTask , DeleteTaskcomment
+from core.permissions import CanViewOrCreateComment , CanViewOrCreateComment, CanUpdateComment, CanDeleteComment
 from core.pagination import DefaultPagination
 from core.choices import UserRoleChoices
 
 
 class TaskCommentListCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanViewOrCreateComment]
 
     def get(self, request, task_id):
         task = get_object_or_404(Task, id=task_id, deleted_at__isnull=True)
 
-        if not CommentOnTask(request.user, task):
-            raise PermissionDenied("You do not have permission to view comments.")
+        #  object-level permission
+        self.check_object_permissions(request, task)
 
         queryset = Comment.objects.filter(
             task=task,
@@ -57,8 +58,8 @@ class TaskCommentListCreateAPIView(APIView):
     def post(self, request, task_id):
         task = get_object_or_404(Task, id=task_id, deleted_at__isnull=True)
 
-        if not CommentOnTask(request.user, task):
-            raise PermissionDenied("You do not have permission to comment on this task.")
+        #  object-level permission
+        self.check_object_permissions(request, task)
 
         serializer = CommentCreateUpdateSerializer(
             data=request.data,
@@ -81,7 +82,7 @@ class TaskCommentListCreateAPIView(APIView):
 class TaskCommentDetailUpdateDeleteAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, task_id, comment_id):
+    def get_object(self, request, task_id, comment_id):
         task = get_object_or_404(Task, id=task_id, deleted_at__isnull=True)
         comment = get_object_or_404(
             Comment,
@@ -89,46 +90,38 @@ class TaskCommentDetailUpdateDeleteAPIView(APIView):
             task=task,
             deleted_at__isnull=True
         )
+        return comment
 
-        if not CommentOnTask(request.user, task):
-            raise PermissionDenied("You do not have permission to view this comment.")
+    def get(self, request, task_id, comment_id):
+        comment = self.get_object(request, task_id, comment_id)
 
-        serializer = CommentDetailSerializer(comment)
+        self.permission_classes = [IsAuthenticated, CanViewOrCreateComment]
+        self.check_object_permissions(request, comment.task)
+
         return Response(
             {
                 "status": "success",
                 "message": "Comment retrieved successfully",
-                "data": serializer.data,
+                "data": CommentDetailSerializer(comment).data,
             }
         )
 
     def patch(self, request, task_id, comment_id):
-        task = get_object_or_404(Task, id=task_id, deleted_at__isnull=True)
-        comment = get_object_or_404(
-            Comment,
-            id=comment_id,
-            task=task,
-            deleted_at__isnull=True
-        )
+        comment = self.get_object(request, task_id, comment_id)
 
-        user = request.user
-
-        if not (
-            comment.user == user or
-            (user.role == UserRoleChoices.ADMIN and task.owner == user)
-        ):
-            raise PermissionDenied("You do not have permission to update this comment.")
+        self.permission_classes = [IsAuthenticated, CanUpdateComment]
+        self.check_object_permissions(request, comment)
 
         serializer = CommentCreateUpdateSerializer(
             comment,
             data=request.data,
             partial=True,
-            context={"request": request, "task": task}
+            context={"request": request, "task": comment.task}
         )
         serializer.is_valid(raise_exception=True)
 
         comment.message = serializer.validated_data["message"]
-        comment.save()
+        comment.save(update_fields=["message"])
 
         return Response(
             {
@@ -139,18 +132,10 @@ class TaskCommentDetailUpdateDeleteAPIView(APIView):
         )
 
     def delete(self, request, task_id, comment_id):
-        user = request.user
+        comment = self.get_object(request, task_id, comment_id)
 
-        task = get_object_or_404(Task, id=task_id, deleted_at__isnull=True)
-        comment = get_object_or_404(
-            Comment,
-            id=comment_id,
-            task=task,
-            deleted_at__isnull=True
-        )
-
-        if not DeleteTaskcomment(user, task, comment):
-            raise PermissionDenied("You do not have permission to delete this comment.")
+        self.permission_classes = [IsAuthenticated, CanDeleteComment]
+        self.check_object_permissions(request, comment)
 
         comment.deleted_at = timezone.now()
         comment.save(update_fields=["deleted_at"])
@@ -164,4 +149,4 @@ class TaskCommentDetailUpdateDeleteAPIView(APIView):
             status=status.HTTP_200_OK,
         )
     
-
+    
