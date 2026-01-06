@@ -9,18 +9,23 @@ class IsAdmin(BasePermission):
 
     def has_permission(self, request, view):
         return (
-            request.user.is_authenticated
+            request.user
+            and request.user.is_authenticated
             and request.user.role == UserRoleChoices.ADMIN
         )
 
 
-class IsSelf(BasePermission):
+class IsAdminOrSelf(BasePermission):
     """
-    Allows access only to the authenticated user's own object.
+    Allows access if user is admin OR accessing their own object.
+    Assumes the object has `id` attribute.
     """
 
     def has_object_permission(self, request, view, obj):
-        return obj.id == request.user.id
+        if request.user.role == UserRoleChoices.ADMIN:
+            return True
+
+        return obj == request.user
 
 
 

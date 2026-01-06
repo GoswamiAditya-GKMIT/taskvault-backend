@@ -2,7 +2,8 @@ import re
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError , InvalidToken
-from django.contrib.auth import authenticate , get_user_model
+from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import check_password
 
 User = get_user_model()
 
@@ -13,7 +14,6 @@ class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only =True , min_length=8)
     confirm_password = serializers.CharField(write_only=True)
-
 
     def validate_password(self, value):
         """
@@ -26,10 +26,18 @@ class RegisterSerializer(serializers.Serializer):
         return value
     
     def validate_username(self,value):
+
+         # user can not create account with the username which is deactivated using soft delete.add
+        if User.objects.filter(username=value, deleted_at__isnull=False).exists():
+            raise serializers.ValidationError(
+                "An account is registered with this username, but is deleted. Please contact the administrator for account recovery."
+            )
+        
         if User.objects.filter(username=value).exists():
             raise serializers.ValidationError(
                 "username already exists."
             )
+        
         if value.isdigit():
             raise serializers.ValidationError(
                     "Username cannot consist of only numbers."
@@ -45,10 +53,21 @@ class RegisterSerializer(serializers.Serializer):
 
     def validate_email(self, value):
         value = value.lower()
+
+        # user can not create account with the username which is deactivated using soft delete.add
+
+        if User.objects.filter(email=value, deleted_at__isnull=False).exists():
+            raise serializers.ValidationError(
+                "An account is registered with this email address, but is deleted. Please contact the administrator for account recovery."
+            )
+        
         if User.objects.filter(email = value).exists():
             raise serializers.ValidationError(
                     "email already exists."
             )
+        
+
+             
         return value
 
     def validate_last_name(self , value):
@@ -84,21 +103,27 @@ class LoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only = True)
 
     def validate(self, attrs):
-        user = authenticate(
-            username = attrs["username"],
-            password = attrs["password"]
+        username = attrs["username"]
+        password = attrs["password"]
 
-        )
-
-        if not user :
-            raise serializers.ValidationError(
-                "Invalid username or password"
-            )
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Invalid username or password")
+            
+        if not check_password(password, user.password):
+            raise serializers.ValidationError("Invalid username or password")
+        
         if user.deleted_at:
             raise serializers.ValidationError(
-                "User account is inactive."
+                "User account is deleted. Contact admin to re-activate the account."
             )
-    
+
+        if not user.is_active:
+            raise serializers.ValidationError(
+                "User account is temporary inactive. Do contact admin to re-activate the account."
+            )
+        
         attrs["user"] = user
         return attrs
     

@@ -4,7 +4,7 @@ from rest_framework.permissions import AllowAny , IsAuthenticated
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from users.serializers import RegisterSerializer , LoginSerializer , ResetPasswordSerializer , LogoutSerializer , TokenRefreshSerializer
+from users.serializers import RegisterSerializer , LoginSerializer , ResetPasswordSerializer , LogoutSerializer , TokenRefreshSerializer , UserListDetailSerializer
 
 class RegisterAPIView(APIView):
     permission_classes = [AllowAny]
@@ -12,17 +12,18 @@ class RegisterAPIView(APIView):
     def post(self , request):
         serializer = RegisterSerializer(data = request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        user_instance = serializer.save()
+        response_serializer = UserListDetailSerializer(user_instance)
 
         return Response(
             {
                 "status": "success",
                 "message": "User registered successfully",
-                "data": None,
+                "data": response_serializer.data,
             },
             status=status.HTTP_201_CREATED,
         )
-    
+
 
 class LoginAPIView(APIView):
     permission_classes = [AllowAny]
@@ -56,13 +57,14 @@ class ResetPasswordAPIView(APIView):
             context={"request": request}
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        user_instance = serializer.save()
+        response_serializer = UserListDetailSerializer(user_instance)
 
         return Response(
             {
                 "status": "success",
                 "message": "Password changed successfully",
-                "data": None,
+                "data": response_serializer.data,
             },
             status=status.HTTP_200_OK,
         )
