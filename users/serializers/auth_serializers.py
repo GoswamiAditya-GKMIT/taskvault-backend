@@ -14,7 +14,6 @@ class RegisterSerializer(serializers.Serializer):
     password = serializers.CharField(write_only =True , min_length=8)
     confirm_password = serializers.CharField(write_only=True)
 
-
     def validate_password(self, value):
         """
         Password must contain at least one special character.
@@ -26,10 +25,18 @@ class RegisterSerializer(serializers.Serializer):
         return value
     
     def validate_username(self,value):
+
+         # user can not create account with the username which is deactivated using soft delete.add
+        if User.objects.filter(username=value, deleted_at__isnull=False).exists():
+            raise serializers.ValidationError(
+                "An account is registered with this username, but is deleted. Please contact the administrator for account recovery."
+            )
+        
         if User.objects.filter(username=value).exists():
             raise serializers.ValidationError(
                 "username already exists."
             )
+        
         if value.isdigit():
             raise serializers.ValidationError(
                     "Username cannot consist of only numbers."
@@ -45,10 +52,21 @@ class RegisterSerializer(serializers.Serializer):
 
     def validate_email(self, value):
         value = value.lower()
+
+        # user can not create account with the username which is deactivated using soft delete.add
+
+        if User.objects.filter(email=value, deleted_at__isnull=False).exists():
+            raise serializers.ValidationError(
+                "An account is registered with this email address, but is deleted. Please contact the administrator for account recovery."
+            )
+        
         if User.objects.filter(email = value).exists():
             raise serializers.ValidationError(
                     "email already exists."
             )
+        
+
+             
         return value
 
     def validate_last_name(self , value):
@@ -96,7 +114,7 @@ class LoginSerializer(serializers.Serializer):
             )
         if user.deleted_at:
             raise serializers.ValidationError(
-                "User account is inactive."
+                "User account is deleted."        # todo: admin can have access to re-actviate the account 
             )
     
         attrs["user"] = user
