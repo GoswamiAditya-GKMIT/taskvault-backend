@@ -2,7 +2,7 @@ import re
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError , InvalidToken
-from django.contrib.auth import authenticate , get_user_model
+from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
 
 User = get_user_model()

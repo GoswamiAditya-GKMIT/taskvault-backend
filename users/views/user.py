@@ -12,7 +12,7 @@ from users.serializers.user import (
 )
 from core.permissions import IsAdmin , IsAdminOrSelf
 from core.pagination import DefaultPagination
-from users.service import soft_delete_user
+from users.services import soft_delete_user
 
 User = get_user_model()  #getting user model inherited from abstractuser
 
@@ -43,7 +43,7 @@ class UserListAPIView(APIView):
 
 
 class UserDetailUpdateDeleteAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrSelf]
+    permission_classes = [IsAuthenticated, IsAdminOrSelf]    # IsAdminOrSelf - admin or self user(logged in user) 
 
     def get_object(self, request, id):
         user = get_object_or_404(
@@ -91,7 +91,7 @@ class UserDetailUpdateDeleteAPIView(APIView):
     #To do - in future - admin can restore the user and all its attributes including the tasks and all
             # or admin can allow to remove the user (hard delete) and recreate the new user 
             # or can just use patch and remove all the associated item and pretend to be use the same existing user
-            
+
     def delete(self, request, id):
         user = self.get_object(request, id)
 

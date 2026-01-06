@@ -3,23 +3,35 @@ from django.contrib.auth import get_user_model
 from core.choices import UserRoleChoices
 
 User = get_user_model()
-class UserListDetailSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    username = serializers.CharField()
-    email = serializers.EmailField()
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
-    role = serializers.CharField()
-    created_at = serializers.DateTimeField()
-    updated_at = serializers.DateTimeField()
-    is_active = serializers.BooleanField()
+class UserListDetailSerializer(serializers.ModelSerializer):
 
-class UserMiniDetailSerializer(serializers.Serializer):
-    id = serializers.UUIDField()
-    username = serializers.CharField()
-    email = serializers.EmailField()
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
+    class Meta:
+        model = User
+        fields = (
+            'id', 
+            'username', 
+            'email', 
+            'first_name', 
+            'last_name', 
+            'role', 
+            'created_at', 
+            'updated_at',
+            'is_active', 
+        )
+
+class UserMiniDetailSerializer(serializers.ModelSerializer):
+    """
+    Serializer for displaying minimal user details (used in tasks).
+    """
+    class Meta:
+        model = User
+        fields = (
+            'id', 
+            'username', 
+            'email', 
+            'first_name', 
+            'last_name'
+        )
 
 
 class UserUpdateSerializer(serializers.Serializer):
