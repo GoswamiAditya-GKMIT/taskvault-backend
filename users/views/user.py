@@ -4,16 +4,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
-from rest_framework.exceptions import PermissionDenied
 
 
 from users.serializers.user import (
     UserListDetailSerializer,
     UserUpdateSerializer,
 )
-from core.permissions import IsAdmin
+from core.permissions import IsAdmin , IsAdminOrSelf
 from core.pagination import DefaultPagination
-from core.choices import UserRoleChoices
 from users.service import soft_delete_user
 
 User = get_user_model()  #getting user model inherited from abstractuser
@@ -45,16 +43,20 @@ class UserListAPIView(APIView):
 
 
 class UserDetailUpdateDeleteAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminOrSelf]
+
+    def get_object(self, request, id):
+        user = get_object_or_404(
+            User,
+            id=id,
+            deleted_at__isnull=True
+        )
+        self.check_object_permissions(request, user)
+        return user
 
     def get(self, request, id):
-        request_user = request.user
+        user = self.get_object(request, id)
 
-        user = get_object_or_404(User, id=id, deleted_at__isnull=True)
-
-        if (request_user.role != UserRoleChoices.ADMIN and request_user != user):
-            raise PermissionDenied("You do not have permission to view this user.")
-        
         serializer = UserListDetailSerializer(user)
         return Response(
             {
@@ -64,34 +66,18 @@ class UserDetailUpdateDeleteAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-    
 
     def patch(self, request, id):
-        request_user = request.user
-
-        user = get_object_or_404(
-            User,
-            id=id,
-            deleted_at__isnull=True
-        )
-
-        if (
-            request_user.role != UserRoleChoices.ADMIN
-            and request_user != user
-        ):
-            raise PermissionDenied(
-                "You do not have permission to update this user."
-            )
+        user = self.get_object(request, id)
 
         serializer = UserUpdateSerializer(
-            instance=user,         
+            instance=user,
             data=request.data,
             partial=True
         )
         serializer.is_valid(raise_exception=True)
 
-        updated_user = serializer.save() 
-
+        updated_user = serializer.save()
 
         return Response(
             {
@@ -101,27 +87,13 @@ class UserDetailUpdateDeleteAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-    
+
     #To do - in future - admin can restore the user and all its attributes including the tasks and all
             # or admin can allow to remove the user (hard delete) and recreate the new user 
-            # or can just use patch and remove all the associated item and pretend to be use the same existing user 
-
+            # or can just use patch and remove all the associated item and pretend to be use the same existing user
+            
     def delete(self, request, id):
-        request_user = request.user
-
-        user = get_object_or_404(
-            User,
-            id=id,
-            deleted_at__isnull=True
-        )
-
-        if (
-            request_user.role != UserRoleChoices.ADMIN
-            and request_user != user
-        ):
-            raise PermissionDenied(
-                "You do not have permission to delete this user."
-            )
+        user = self.get_object(request, id)
 
         soft_delete_user(user)
 

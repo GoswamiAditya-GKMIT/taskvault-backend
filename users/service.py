@@ -3,7 +3,9 @@ from django.db import transaction
 from tasks.models import Task, Comment
 
 
-
+#To do - in future - admin can restore the user and all its attributes including the tasks and all
+            # or admin can allow to remove the user (hard delete) and recreate the new user 
+            # or can just use patch and remove all the associated item and pretend to be use the same existing user 
 @transaction.atomic
 def soft_delete_user(user):
     """
