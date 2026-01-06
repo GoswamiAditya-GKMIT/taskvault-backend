@@ -9,9 +9,10 @@ from django.utils import timezone
 
 from core.choices import UserRoleChoices
 from core.pagination import DefaultPagination
+from core.permissions import CanViewTask, CanUpdateTask, CanDeleteTask
 from tasks.services import update_task
 from tasks.models import Task
-from tasks.serializers.task_serializers import (
+from tasks.serializers.task import (
     TaskCreateSerializer,
     TaskDetailSerializer,
     TaskListSerializer,
@@ -97,33 +98,27 @@ class TaskListCreateAPIView(APIView):
 class TaskDetailUpdateDeleteAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, id):
-
-        user = request.user
-
+    def get_object(self, request, id):
         task = get_object_or_404(Task, id=id, deleted_at__isnull=True)
+        self.check_object_permissions(request, task)
+        return task
 
-            
-        if user.role != UserRoleChoices.ADMIN and task.assignee != user:
-            raise PermissionDenied("You do not have permission to view this task.")
+    def get(self, request, id):
+        self.permission_classes = [IsAuthenticated, CanViewTask]
+        task = self.get_object(request, id)
 
-        serializer = TaskDetailSerializer(task)
         return Response(
             {
                 "status": "success",
                 "message": "Task retrieved successfully",
-                "data": serializer.data,
+                "data": TaskDetailSerializer(task).data,
             },
             status=status.HTTP_200_OK,
         )
-    
+
     def patch(self, request, id):
-        user = request.user
-
-        task = get_object_or_404(Task, id=id, deleted_at__isnull=True)
-
-        if not (task.assignee == user or task.owner == user):
-            raise PermissionDenied("You do not have permission to update this task.")
+        self.permission_classes = [IsAuthenticated, CanUpdateTask]
+        task = self.get_object(request, id)
 
         serializer = TaskUpdateSerializer(
             task,
@@ -135,9 +130,10 @@ class TaskDetailUpdateDeleteAPIView(APIView):
 
         task = update_task(
             task,
-            user=user,
+            user=request.user,
             **serializer.validated_data
         )
+
         return Response(
             {
                 "status": "success",
@@ -146,17 +142,10 @@ class TaskDetailUpdateDeleteAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-    
-    
+
     def delete(self, request, id):
-        user = request.user
-
-        task = get_object_or_404(Task, id=id, deleted_at__isnull=True)
-
-        if not ((user.role == UserRoleChoices.USER and task.owner == user and task.assignee == user)
-                    or  (user.role == UserRoleChoices.ADMIN and task.owner == user)):
-                             
-                             raise PermissionDenied("You do not have permission to delete this task.")
+        self.permission_classes = [IsAuthenticated, CanDeleteTask]
+        task = self.get_object(request, id)
 
         task.deleted_at = timezone.now()
         task.save(update_fields=["deleted_at"])
