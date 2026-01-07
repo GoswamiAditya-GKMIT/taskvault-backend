@@ -21,8 +21,8 @@ from django.urls import path , include
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    path('api/', include('users.urls')),
-    path('api/', include('tasks.urls')),
+    path('api/v1/', include('users.urls')),
+    path('api/v1/', include('tasks.urls')),
 ]
 
 handler404 = "core.exceptions.custom_404_handler"
