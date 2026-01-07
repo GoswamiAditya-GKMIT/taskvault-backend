@@ -67,7 +67,8 @@ class TaskCreateSerializer(serializers.Serializer):
                 try:
                     assignee = User.objects.get(
                         id=assignee_id,
-                        deleted_at__isnull=True
+                        deleted_at__isnull=True,
+                        is_active=True 
                     )
                 except User.DoesNotExist:
                     raise serializers.ValidationError(

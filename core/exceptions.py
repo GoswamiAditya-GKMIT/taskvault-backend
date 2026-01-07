@@ -8,6 +8,8 @@ from rest_framework.exceptions import (
     MethodNotAllowed,
     NotFound
 )
+from django.http import JsonResponse
+
 
 
 def custom_api_exception_handler(exc, context):
@@ -46,7 +48,6 @@ def custom_api_exception_handler(exc, context):
     return response
 
 
-from django.http import JsonResponse
 
 
 def custom_404_handler(request, exception):
@@ -60,3 +61,4 @@ def custom_404_handler(request, exception):
         },
         status=404,
     )
+
