@@ -7,6 +7,7 @@ from django.contrib.auth.hashers import check_password
 
 User = get_user_model()
 
+
 class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(min_length=6 , max_length=150)
     first_name = serializers.CharField(max_length=150)
