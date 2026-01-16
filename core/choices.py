@@ -2,8 +2,10 @@
 from django.db import models
 
 class UserRoleChoices(models.TextChoices):
-    ADMIN = "ADMIN", "Admin"
+    SUPER_ADMIN = "SUPER_ADMIN", "Super Admin"
+    TENANT_ADMIN = "TENANT_ADMIN", "Tenant Admin"
     USER = "USER", "User"
+
 
 class TaskStatusChoices(models.TextChoices):
     PENDING = "PENDING", "Pending"

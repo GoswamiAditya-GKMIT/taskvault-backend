@@ -2,6 +2,20 @@ from rest_framework.permissions import BasePermission
 from core.choices import UserRoleChoices
 
 
+
+class IsSuperAdmin(BasePermission):
+    """
+    Allows access only to SUPER_ADMIN users.
+    """
+
+    def has_permission(self, request, view):
+        return (
+            request.user
+            and request.user.is_authenticated
+            and request.user.role == UserRoleChoices.SUPER_ADMIN
+        )
+    
+
 class IsAdmin(BasePermission):
     """
     Allows access only to admin users.
