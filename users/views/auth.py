@@ -7,8 +7,7 @@ from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 import uuid
-
-
+import time
 
 
 from users.serializers import RegisterSerializer , LoginSerializer , ResetPasswordSerializer, LogoutSerializer , TokenRefreshSerializer , UserListDetailSerializer , ResendOTPSerializer , UserMiniDetailSerializer , InviteRegisterSerializer , LoginOTPVerifySerializer, VerifyUserTokenSerializer, ResendLoginOTPSerializer
@@ -134,6 +133,24 @@ class LogoutAPIView(APIView):
         serializer = LogoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+
+        # Blacklist Access Token
+        try:
+            token = request.auth
+            if token:
+                jti = token.get("jti")
+                exp = token.get("exp")
+                
+                # Calculate remaining time (TTL)
+                current_time = time.time()
+                ttl = exp - current_time
+                
+                if ttl > 0:
+                    # Store in Redis
+                    cache.set(f"blacklisted_access_token:{jti}", True, timeout=int(ttl))
+        except Exception:
+            # If token extraction fails, just proceed (token might be missing or invalid)
+            pass
 
         return Response(
             {
