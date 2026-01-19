@@ -16,7 +16,7 @@ class IsSuperAdmin(BasePermission):
         )
     
 
-class IsAdmin(BasePermission):
+class IsTenantAdmin(BasePermission):
     """
     Allows access only to admin users.
     """
@@ -25,9 +25,23 @@ class IsAdmin(BasePermission):
         return (
             request.user
             and request.user.is_authenticated
-            and request.user.role == UserRoleChoices.ADMIN
+            and request.user.role == UserRoleChoices.TENANT_ADMIN
         )
 
+class IsTenantAdminOrSuperAdmin(BasePermission):
+    """
+    Allows access to both SUPER_ADMIN and TENANT_ADMIN users.
+    """
+
+    def has_permission(self, request, view):
+        return (
+            request.user and 
+            request.user.is_authenticated and 
+            request.user.role in [
+                UserRoleChoices.SUPER_ADMIN, 
+                UserRoleChoices.TENANT_ADMIN
+            ]
+        )
 
 class IsAdminOrSelf(BasePermission):
     """
