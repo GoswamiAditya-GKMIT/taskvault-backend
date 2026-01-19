@@ -6,13 +6,14 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
+import uuid
 
 
 
 
-from users.serializers import RegisterSerializer , LoginSerializer , ResetPasswordSerializer , LogoutSerializer , TokenRefreshSerializer , UserListDetailSerializer , ResendOTPSerializer , VerifyEmailSerializer, UserMiniDetailSerializer , InviteRegisterSerializer , LoginOTPVerifySerializer
+from users.serializers import RegisterSerializer , LoginSerializer , ResetPasswordSerializer, LogoutSerializer , TokenRefreshSerializer , UserListDetailSerializer , ResendOTPSerializer , UserMiniDetailSerializer , InviteRegisterSerializer , LoginOTPVerifySerializer, VerifyUserTokenSerializer, ResendLoginOTPSerializer
 from core.utils import generate_otp
-from users.tasks import send_user_verification_otp
+from users.tasks import send_user_verification_otp, send_verification_link_email
 from core.constants import CACHE_TIMEOUT , RESEND_TIME
 from users.models import Organization
 User = get_user_model()  #getting user model inherited from abstractuser
@@ -38,19 +39,26 @@ class RegisterAPIView(APIView):
 
         user = serializer.save()
 
-        otp = generate_otp()
+        # Generate Verification Token
+        token = uuid.uuid4().hex
+        
+        # Store token -> user_id in cache with 24h expiry
+        cache_key = f"user_verification_token:{token}"
+        # Store user_id -> token for invalidation on resend
+        user_token_key = f"user_verification_active_token:{user.id}"
 
-        cache_key = f"user_verify_otp:{user.id}"
-        cache.set(cache_key, {"otp": otp}, timeout=self.OTP_TTL)
+        cache.set(cache_key, user.id, timeout=86400) # 24 hours
+        cache.set(user_token_key, token, timeout=86400) 
 
-        send_user_verification_otp.delay(user.email, otp)
-        # response_serializer = UserMiniDetailSerializer(user)
+        verification_link = f"http://localhost:3000/verify-email?token={token}"
+
+        send_verification_link_email.delay(user.email, verification_link)
 
         return Response(
             {
                 "status": "success",
-                "message": "Registration successful. OTP sent to email.",
-                "data": None
+                "message": "Registration successful. Verification link sent to email.",
+                "data": UserListDetailSerializer(user).data
             },
             status=status.HTTP_201_CREATED,
         )
@@ -158,84 +166,29 @@ class TokenRefreshAPIView(APIView):
     
 
 
-class VerifyEmailAPIView(APIView):
-    """
-    POST /auth/verify-email
-    """
-    permission_classes = [AllowAny]
 
-    def post(self, request):
-        serializer = VerifyEmailSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        user = serializer.validated_data["user"]
-        otp = serializer.validated_data["otp"]
-
-        cache_key = f"user_verify_otp:{user.email}"
-        cached_data = cache.get(cache_key)
-
-        if not cached_data:
-            return Response(
-                {
-                    "status": "failed",
-                    "message": "OTP expired or invalid.",
-                    "error": None,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        if cached_data.get("otp") != otp:
-            return Response(
-                {
-                    "status": "failed",
-                    "message": "Invalid OTP.",
-                    "error": None,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Activate user
-        user.is_email_verified = True
-        user.is_active = True
-        user.save(update_fields=["is_email_verified", "is_active"])
-        
-        # Remove OTP (one-time use)
-        cache.delete(cache_key)
-
-        response_serializer = UserListDetailSerializer(user)
-
-        return Response(
-            {
-                "status": "success",
-                "message": "Email verified successfully.",
-                "data": response_serializer.data,
-            },
-            status=status.HTTP_200_OK,
-        )
     
 
-class ResendOTPAPIView(APIView):
+class ResendLoginOTPAPIView(APIView):
     """
-    POST /auth/resend-otp
+    POST /auth/login/resend-otp/
     """
-
     permission_classes = [AllowAny]
-
-    OTP_TTL = CACHE_TIMEOUT     # 5 minutes
-    RESEND_COOLDOWN = RESEND_TIME  # 1 minute
+    OTP_TTL = CACHE_TIMEOUT
+    RESEND_COOLDOWN = RESEND_TIME
 
     def post(self, request):
-        serializer = ResendOTPSerializer(data=request.data)
+        serializer = ResendLoginOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         user = serializer.validated_data["user"]
+        
+        cooldown_key = f"login_otp_cooldown:{user.id}"
+        otp_cache_key = f"login_otp:{user.id}"
 
-        otp_cache_key = f"user_verify_otp:{user.email}"
-        cooldown_key = f"user_otp_cooldown:{user.email}"
-
-        # Prevent OTP spamming
+        # Rate limit resend
         if cache.get(cooldown_key):
-            return Response(
+             return Response(
                 {
                     "status": "failed",
                     "message": "Please wait before requesting another OTP.",
@@ -244,27 +197,13 @@ class ResendOTPAPIView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        cached_data = cache.get(otp_cache_key)
-
-        # If OTP exists and is still valid, reuse it
-        if cached_data and "otp" in cached_data:
-            return Response(
-                {
-                    "status": "failed",
-                    "message": "Please wait before requesting another OTP.",
-                    "data": None,
-                },
-                status=status.HTTP_429_TOO_MANY_REQUESTS,
-            )        
-        else:
-            otp = generate_otp()
-            cache.set(
-                otp_cache_key,
-                {"otp": otp},
-                timeout=self.OTP_TTL,
-            )
-
-        # Set resend cooldown
+        # Generate NEW OTP (Replacing the old one effectively validates user wants fresh code)
+        otp = generate_otp()
+        
+        # Overwrite the cache key -> Invalidates old OTP
+        cache.set(otp_cache_key, {"otp": otp}, timeout=self.OTP_TTL)
+        
+        # Set cooldown
         cache.set(cooldown_key, True, timeout=self.RESEND_COOLDOWN)
 
         send_user_verification_otp.delay(user.email, otp)
@@ -272,7 +211,63 @@ class ResendOTPAPIView(APIView):
         return Response(
             {
                 "status": "success",
-                "message": "OTP has been resent to your email.",
+                "message": "A new OTP has been sent to your email.",
+                "data": None,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResendVerificationLinkAPIView(APIView):
+    """
+    POST /auth/resend-verification-link/
+    """
+    permission_classes = [AllowAny]
+    TOKEN_TTL = 86400  # 24 hours
+    RESEND_COOLDOWN = RESEND_TIME
+
+    def post(self, request):
+        serializer = ResendOTPSerializer(data=request.data) # Reusing existing serializer as it just checks email and user exists
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.validated_data["user"]
+        
+        # Check cooldown
+        cooldown_key = f"user_verification_cooldown:{user.email}"
+        if cache.get(cooldown_key):
+             return Response(
+                {
+                    "status": "failed",
+                    "message": "Please wait before requesting another link.",
+                    "error": None,
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # Invalidate old token if exists
+        user_active_token_key = f"user_verification_active_token:{user.id}"
+        old_token = cache.get(user_active_token_key)
+        
+        if old_token:
+            cache.delete(f"user_verification_token:{old_token}")
+            cache.delete(user_active_token_key)
+
+        # Generate new token
+        token = uuid.uuid4().hex
+        
+        cache.set(f"user_verification_token:{token}", user.id, timeout=self.TOKEN_TTL)
+        cache.set(user_active_token_key, token, timeout=self.TOKEN_TTL)
+        
+        # Set cooldown
+        cache.set(cooldown_key, True, timeout=self.RESEND_COOLDOWN)
+
+        verification_link = f"http://localhost:3000/verify-email?token={token}"
+        send_verification_link_email.delay(user.email, verification_link)
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Verification link has been resent to your email.",
                 "data": None,
             },
             status=status.HTTP_200_OK,
@@ -337,5 +332,33 @@ class InviteRegisterAPIView(APIView):
                 "data": None,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class VerifyUserTokenAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = VerifyUserTokenSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.validated_data["user"]
+        token = serializer.validated_data["token"]
+
+        # Verify user
+        user.is_email_verified = True
+        user.is_active = True
+        user.save(update_fields=["is_email_verified", "is_active"])
+
+        # Invalidate token
+        cache.delete(f"user_verification_token:{token}")
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Email verified successfully. You can now login.",
+                "data": None,
+            },
+            status=status.HTTP_200_OK,
         )
     

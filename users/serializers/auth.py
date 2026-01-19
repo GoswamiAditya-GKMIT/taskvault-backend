@@ -295,27 +295,34 @@ class TokenRefreshSerializer(serializers.Serializer):
         }
 
 
-
-class VerifyEmailSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    otp = serializers.CharField(min_length=6, max_length=6)
+class ResendLoginOTPSerializer(serializers.Serializer):
+    username = serializers.CharField()
 
     def validate(self, attrs):
-        email = attrs["email"]
+        username = attrs["username"]
 
         try:
-            user = User.objects.get(
-                email=email,
-                is_email_verified=False,
-                deleted_at__isnull=True,
-            )
+            user = User.objects.get(username=username)
         except User.DoesNotExist:
-            raise serializers.ValidationError(
-                "No pending verification found for this email."
+             raise serializers.ValidationError(
+                "User with this username does not exist."
             )
+
+        if user.deleted_at:
+             raise serializers.ValidationError("User account is deleted.")
+
+        if not user.is_email_verified:
+             raise serializers.ValidationError("Email verification pending.")
+
+        if not user.is_active:
+             raise serializers.ValidationError("User account inactive.")
 
         attrs["user"] = user
         return attrs
+
+
+
+
     
 
 
@@ -422,6 +429,26 @@ class LoginOTPVerifySerializer(serializers.Serializer):
 
         # One-time use
         cache.delete(cache_key)
+
+        attrs["user"] = user
+        return attrs
+
+
+class VerifyUserTokenSerializer(serializers.Serializer):
+    token = serializers.CharField()
+
+    def validate(self, attrs):
+        token = attrs["token"]
+        cache_key = f"user_verification_token:{token}"
+        user_id = cache.get(cache_key)
+
+        if not user_id:
+            raise serializers.ValidationError({"token": "Invalid or expired token."})
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({"token": "User not found."})
 
         attrs["user"] = user
         return attrs
