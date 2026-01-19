@@ -16,7 +16,6 @@ from users.serializers import (
     UserListDetailSerializer,
     UserUpdateSerializer,
     UserCreateSerializer,
-    VerifyEmailSerializer,
     InviteUserSerializer,
     ForgotPasswordSerializer
 
@@ -25,7 +24,7 @@ from core.permissions import IsAdminOrSelf , IsTenantAdminOrSuperAdmin , IsTenan
 from core.pagination import DefaultPagination
 from users.services import soft_delete_user
 from core.utils import generate_otp
-from users.tasks import send_user_verification_otp , send_user_invite_email , send_password_reset_email
+from users.tasks import send_user_verification_otp , send_user_invite_email , send_password_reset_email, send_verification_link_email
 from core.choices import UserRoleChoices
 from core.constants import CACHE_TIMEOUT , INVITE_LINK_EXPIRY , PASSWORD_RESET_TTL
 
@@ -87,27 +86,26 @@ class UserListCreateAPIView(APIView):
 
         user = serializer.save()
 
-        # Generate OTP
-        otp = generate_otp()
-
-        cache_key = f"user_verify_otp:{user.email}"
-
-        if cache.get(cache_key):
-            return Response({"status":"Failed",
-                             "message": "OTP already sent. Please verify.",
-                             "data":None}, status=400)
+        # Generate Verification Token
+        token = uuid.uuid4().hex
         
-        cache.set(cache_key, {"otp": otp}, timeout=CACHE_TIMEOUT)
+        # Store token -> user_id in cache with 24h expiry
+        cache_key = f"user_verification_token:{token}"
+        # Store user_id -> token for invalidation on resend
+        user_token_key = f"user_verification_active_token:{user.id}"
 
-        send_user_verification_otp.delay(user.email, otp)
+        cache.set(cache_key, user.id, timeout=86400) # 24 hours
+        cache.set(user_token_key, token, timeout=86400) 
 
-        response_serializer = UserListDetailSerializer(user)
+        verification_link = f"http://localhost:3000/verify-email?token={token}"
+
+        send_verification_link_email.delay(user.email, verification_link)
 
         return Response(
             {
                 "status": "success",
-                "message": "OTP sent to email. Please verify.",
-                "data": None                                                    #response_serializer.data
+                "message": "User created successfully. Verification link sent to email.",
+                "data": UserListDetailSerializer(user).data
             },
             status=status.HTTP_201_CREATED,
         )
