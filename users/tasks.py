@@ -5,8 +5,8 @@ from django.core.mail import send_mail
 @shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={"max_retries": 3, "countdown": 10})
 def send_user_verification_otp(self, email, otp):
     send_mail(
-        subject="Verify your TaskVault account",
-        message=f"Your OTP for account verification is {otp}. It is valid for 5 minutes.",
+        subject="Verify your TaskVault account Login",
+        message=f"Your OTP for account Login is {otp}. It is valid for 5 minutes.",
         from_email=None,
         recipient_list=[email],
         fail_silently=False,
