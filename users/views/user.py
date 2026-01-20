@@ -274,6 +274,21 @@ class ForgotPasswordAPIView(APIView):
                 status=status.HTTP_200_OK,
             )
 
+        # Rate Limit Check
+        cooldown_key = f"password_reset_cooldown:{user.id}"
+        if cache.get(cooldown_key):
+             return Response(
+                {
+                    "status": "failed",
+                    "message": "Please wait 1 minute before requesting another reset link.",
+                    "error": None,
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        
+        # Set cooldown
+        cache.set(cooldown_key, True, timeout=60)
+
         user_token_key = f"password_reset_user:{user.id}"
 
         #  FIXED rate-limit logic
