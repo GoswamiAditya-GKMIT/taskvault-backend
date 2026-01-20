@@ -7,6 +7,8 @@ from core.permissions import IsSuperAdmin
 from users.serializers import OrganizationSerializer
 from core.pagination import DefaultPagination
 from users.models import Organization
+from django.utils import timezone
+
 
 class OrganizationCreateAPIView(APIView):
     permission_classes = [IsSuperAdmin]
@@ -47,4 +49,86 @@ class OrganizationCreateAPIView(APIView):
                 "data": serializer.data,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class OrganizationDetailAPIView(APIView):
+    permission_classes = [IsSuperAdmin]
+
+    def get_object(self, id):
+        try:
+            return Organization.objects.get(id=id, deleted_at__isnull=True)
+        except Organization.DoesNotExist:
+            return None
+
+    def get(self, request, id):
+        organization = self.get_object(id)
+        if not organization:
+            return Response(
+                {"status": "failed", "message": "Organization not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = OrganizationSerializer(organization)
+        return Response(
+            {
+                "status": "success",
+                "message": "Organization retrieved successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def put(self, request, id):
+        organization = self.get_object(id)
+        if not organization:
+            return Response(
+                {"status": "failed", "message": "Organization not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = OrganizationSerializer(organization, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Organization updated successfully.",
+                "data": serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def delete(self, request, id):
+        organization = self.get_object(id)
+        if not organization:
+            return Response(
+                {"status": "failed", "message": "Organization not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Constraint: Cannot delete if users exist
+        if organization.users.filter(deleted_at__isnull=True).exists():
+             return Response(
+                {
+                    "status": "failed",
+                    "message": "Cannot delete organization with associated users. Please remove them first.",
+                    "data": None,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Soft delete
+        organization.deleted_at = timezone.now()
+        organization.is_active = False # Deactivate as well
+        organization.save()
+
+        return Response(
+            {
+                "status": "success",
+                "message": "Organization deleted successfully.",
+                "data": None,
+            },
+            status=status.HTTP_200_OK,
         )
