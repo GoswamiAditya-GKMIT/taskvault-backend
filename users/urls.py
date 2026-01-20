@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterAPIView , LoginAPIView , ResetPasswordAPIView , LogoutAPIView , TokenRefreshAPIView , UserListCreateAPIView, UserDetailUpdateDeleteAPIView , OrganizationCreateAPIView , ResendVerificationLinkAPIView , LoginOTPVerifyAPIView , reset_password_view ,ForgotPasswordAPIView , VerifyUserTokenAPIView , InviteUserAPIView , InviteRegisterAPIView , ResendLoginOTPAPIView
+from .views import RegisterAPIView , LoginAPIView , ResetPasswordAPIView , LogoutAPIView , TokenRefreshAPIView , UserListCreateAPIView, UserDetailUpdateDeleteAPIView , OrganizationCreateAPIView , ResendVerificationLinkAPIView , LoginOTPVerifyAPIView , reset_password_view ,ForgotPasswordAPIView , VerifyUserTokenAPIView , InviteUserAPIView , InviteRegisterAPIView , ResendLoginOTPAPIView, OrganizationDetailAPIView
 
 
 urlpatterns = [
@@ -20,5 +20,6 @@ urlpatterns = [
     path("users/<uuid:id>/" , UserDetailUpdateDeleteAPIView.as_view()),
     path("users/invite/", InviteUserAPIView.as_view()),
 
-    path("organizations/" , OrganizationCreateAPIView.as_view())
+    path("organizations/" , OrganizationCreateAPIView.as_view()),
+    path("organizations/<uuid:id>/" , OrganizationDetailAPIView.as_view())
 ]
