@@ -190,3 +190,33 @@ class CanViewTaskHistory(BasePermission):
         return obj.assignee == user
     
     
+class CanAccessUser(BasePermission):
+    """
+    Custom permission to handle User detail access.
+    
+    Rules:
+    1. User can access themselves.
+    2. SUPER_ADMIN can access TENANT_ADMIN.
+    3. TENANT_ADMIN can access Users in their own organization.
+    """
+    
+    def has_object_permission(self, request, view, obj):
+        user = request.user
+        
+        # 1. Allow Self Access
+        if obj == user:
+            return True
+            
+        # 2. Super Admin -> Tenant Admin
+        if user.role == UserRoleChoices.SUPER_ADMIN:
+            return obj.role == UserRoleChoices.TENANT_ADMIN
+            
+        # 3. Tenant Admin -> Org User
+        if user.role == UserRoleChoices.TENANT_ADMIN:
+            # Must be in same organization
+            if obj.organization != user.organization:
+                return False
+
+            return True 
+            
+        return False

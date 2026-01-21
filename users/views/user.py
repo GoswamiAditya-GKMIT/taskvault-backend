@@ -8,7 +8,7 @@ from django.core.cache import cache
 import uuid
 from django.core.exceptions import ValidationError
 from django.shortcuts import render
-from django.http import HttpResponse
+from django.http import HttpResponse, Http404
 from django.contrib.auth.password_validation import validate_password
 
 
@@ -20,7 +20,7 @@ from users.serializers import (
     ForgotPasswordSerializer
 
 )
-from core.permissions import IsAdminOrSelf , IsTenantAdminOrSuperAdmin , IsTenantAdmin
+from core.permissions import IsAdminOrSelf , IsTenantAdminOrSuperAdmin , IsTenantAdmin, CanAccessUser
 from core.pagination import DefaultPagination
 from users.services import soft_delete_user
 from core.utils import generate_otp
@@ -44,18 +44,33 @@ class UserListCreateAPIView(APIView):
         Tenant-aware queryset
         """
         user = request.user
+        qs = User.objects.all()
 
-        qs = User.objects.filter(
-            deleted_at__isnull=True,
-            is_email_verified=True,
-        )
+        # Filtering by active status
+        active = request.query_params.get("active")
+        if active:
+            is_active = active.lower() == "true"
+            qs = qs.filter(is_active=is_active)
 
-        # SUPER_ADMIN can see all users
+        # Filtering by deleted status
+        deleted = request.query_params.get("deleted")
+        if deleted and deleted.lower() == "true":
+            qs = qs.filter(deleted_at__isnull=False)
+        else:
+            qs = qs.filter(deleted_at__isnull=True)
+
+
+        # SUPER_ADMIN can see all tenant admins
         if user.role == UserRoleChoices.SUPER_ADMIN:
-            return qs
+            return qs.filter(role=UserRoleChoices.TENANT_ADMIN)
 
-        # TENANT_ADMIN can see only users of their organization
-        return qs.filter(organization=user.organization)
+        # TENANT_ADMIN can see only users of their organization excluding themselves
+        if user.role == UserRoleChoices.TENANT_ADMIN:
+            return qs.filter(
+                organization=user.organization
+            ).exclude(role=UserRoleChoices.TENANT_ADMIN)
+            
+        return qs.none()
 
     # ---------- GET /users ----------
     def get(self, request):
@@ -111,15 +126,15 @@ class UserListCreateAPIView(APIView):
         )
     
 class UserDetailUpdateDeleteAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminOrSelf]    # IsAdminOrSelf - admin or self user(logged in user) 
+    permission_classes = [IsAuthenticated, CanAccessUser]
 
     def get_object(self, request, id):
-        user = get_object_or_404(
-            User,
-            id=id,
-            deleted_at__isnull=True
-        )
+        # We fetch the user first, then check permissions on the object
+        user = get_object_or_404(User, id=id)
+        
+        # This triggers has_object_permission in CanAccessUser
         self.check_object_permissions(request, user)
+        
         return user
 
     def get(self, request, id):
@@ -141,7 +156,8 @@ class UserDetailUpdateDeleteAPIView(APIView):
         serializer = UserUpdateSerializer(
             instance=user,
             data=request.data,
-            partial=True
+            partial=True,
+            context={"request_user": request.user}
         )
         serializer.is_valid(raise_exception=True)
 
