@@ -176,10 +176,11 @@ class UserListDetailSerializer(serializers.ModelSerializer):
             'last_name', 
             'role', 
             'organization',
-            'created_at', 
-            'updated_at',
             'is_active', 
             'is_email_verified',
+            'created_at', 
+            'updated_at',
+            'deleted_at'
         )
 
 class UserMiniDetailSerializer(serializers.ModelSerializer):
@@ -230,13 +231,13 @@ class UserUpdateSerializer(serializers.Serializer):
         request_user = self.context.get("request_user")
         
         if "is_active" in attrs:
-            # If the user is NOT an Admin, they cannot change is_active.
-            if request_user and request_user.role != UserRoleChoices.ADMIN:
+            # If the user is NOT an TENANT Admin, they cannot change is_active.
+            if request_user and request_user.role != UserRoleChoices.TENANT_ADMIN:
                 
                 # Check 1: Prevent changing the value
                 if getattr(self.instance, 'is_active') != attrs['is_active']:
                     raise serializers.ValidationError({
-                        "is_active": ["Only administrators can modify the 'is_active' status."]
+                        "is_active": ["Only tenant admins can modify the 'is_active' status."]
                     })
                 
                 # If they tried to change it to the same value, we still remove it
