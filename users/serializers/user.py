@@ -7,7 +7,6 @@ from .organization import OrganizationSerializer
 
 User = get_user_model()
 
-
 class UserCreateSerializer(serializers.Serializer):    
     email = serializers.EmailField()
     username = serializers.CharField(min_length=6, max_length=150)
@@ -25,6 +24,8 @@ class UserCreateSerializer(serializers.Serializer):
         return value
     
     def validate_email(self, value):
+
+        value = value.lower()
                 
         if User.objects.filter(email=value, deleted_at__isnull=False).exists():
             raise serializers.ValidationError(
@@ -60,38 +61,26 @@ class UserCreateSerializer(serializers.Serializer):
             )
          return value
     
-    def validate_username(self,value):
-
-         # user can not create account with the username which is deactivated using soft delete.add
-        if User.objects.filter(username=value, deleted_at__isnull=False).exists():
-            raise serializers.ValidationError(
-                "An account is registered with this username, but is deleted. Please contact the administrator for account recovery."
-            )
-        
-        # if User.objects.filter(username=value, is_email_verified=False).exists():
-        #     raise serializers.ValidationError(
-        #             "User verification is already pending for this username."
-        #     )
-
-        if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError(
-                "username already exists."
-            )
-        
+    def validate_username(self, value):
         if value.isdigit():
-            raise serializers.ValidationError(
-                    "Username cannot consist of only numbers."
-            )       
+            raise serializers.ValidationError("Username cannot consist of only numbers.")
+
+        existing_user = User.objects.filter(username__iexact=value).first()
+        if existing_user:
+            if existing_user.deleted_at is not None:
+                raise serializers.ValidationError("Account is deleted. Contact admin.")
+            raise serializers.ValidationError("Username already exists.")
+            
         return value
-    
+        
     def validate_last_name(self , value):
-        if not value.isalpha():
-            raise serializers.ValidationError(
-                    "it should only contain alphabets"
-            )
-        return value
+            if not value.isalpha():
+                raise serializers.ValidationError(
+                        "it should only contain alphabets"
+                )
+            return value
     
-    
+
     def validate(self, attrs):
         request = self.context["request"]
         creator = request.user
@@ -139,6 +128,12 @@ class UserCreateSerializer(serializers.Serializer):
                 # Raise validation error if ID is not found
                 raise serializers.ValidationError({
                     "organization_id": "No organization found with the provided ID."
+                })
+            
+            # Block creation if Org is deactivated
+            if not organization.is_active:
+                 raise serializers.ValidationError({
+                    "organization_id": "Cannot create Tenant Admin for a deactivated organization."
                 })
             
             role = UserRoleChoices.TENANT_ADMIN
@@ -231,9 +226,16 @@ class UserUpdateSerializer(serializers.Serializer):
         request_user = self.context.get("request_user")
         
         if "is_active" in attrs:
-            # If the user is NOT an TENANT Admin, they cannot change is_active.
-            if request_user and request_user.role != UserRoleChoices.TENANT_ADMIN:
-                
+            is_allowed = False
+            if request_user:
+                if request_user.role == UserRoleChoices.TENANT_ADMIN:
+                    is_allowed = True
+                elif request_user.role == UserRoleChoices.SUPER_ADMIN:
+                    # Super Admin can only modify Tenant Admin
+                    if self.instance.role == UserRoleChoices.TENANT_ADMIN:
+                        is_allowed = True
+
+            if not is_allowed:
                 # Check 1: Prevent changing the value
                 if getattr(self.instance, 'is_active') != attrs['is_active']:
                     raise serializers.ValidationError({

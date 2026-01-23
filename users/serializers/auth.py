@@ -179,7 +179,10 @@ class LoginSerializer(serializers.Serializer):
             raise PermissionDenied("User account inactive.")
 
         if user.organization and (user.organization.deleted_at or not user.organization.is_active):
-            raise PermissionDenied("Your organization is no longer active.")
+             if user.role == UserRoleChoices.TENANT_ADMIN:
+                  raise PermissionDenied("Your organization is deactivated please contact super admin to reactive the organization")
+             else:
+                  raise PermissionDenied("Your organization is deactivated")
 
         otp_cache_key = f"login_otp:{user.id}"
         cooldown_key = f"login_otp_cooldown:{user.id}"
@@ -434,7 +437,10 @@ class LoginOTPVerifySerializer(serializers.Serializer):
         cache.delete(cache_key)
 
         if user.organization and (user.organization.deleted_at or not user.organization.is_active):
-            raise AuthenticationFailed("Your organization is no longer active.")
+             if user.role == UserRoleChoices.TENANT_ADMIN:
+                  raise AuthenticationFailed("Your organization is deactivated please contact super admin to reactive the organization")
+             else:
+                  raise AuthenticationFailed("Your organization is deactivated")
 
         attrs["user"] = user
         return attrs

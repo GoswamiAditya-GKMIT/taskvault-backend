@@ -20,7 +20,7 @@ from users.serializers import (
     ForgotPasswordSerializer
 
 )
-from core.permissions import IsAdminOrSelf , IsTenantAdminOrSuperAdmin , IsTenantAdmin, CanAccessUser
+from core.permissions import IsTenantAdminOrSuperAdmin , IsTenantAdmin, CanAccessUser
 from core.pagination import DefaultPagination
 from users.services import soft_delete_user
 from core.utils import generate_otp
@@ -29,7 +29,7 @@ from core.choices import UserRoleChoices
 from core.constants import CACHE_TIMEOUT , INVITE_LINK_EXPIRY , PASSWORD_RESET_TTL
 
 
-User = get_user_model()  #getting user model inherited from abstractuser
+User = get_user_model() 
 
 class UserListCreateAPIView(APIView):
     """
@@ -178,6 +178,18 @@ class UserDetailUpdateDeleteAPIView(APIView):
 
     def delete(self, request, id):
         user = self.get_object(request, id)
+        
+        # Block Super Admin from deleting Tenant Admin of Deactivated Org
+        if request.user.role == UserRoleChoices.SUPER_ADMIN:
+            if user.role == UserRoleChoices.TENANT_ADMIN:
+                if user.organization and not user.organization.is_active:
+                     return Response(
+                        {
+                            "status": "failed", 
+                            "message": "Cannot delete Tenant Admin of a deactivated organization."
+                        },
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
 
         soft_delete_user(user)
 
@@ -226,7 +238,7 @@ class InviteUserAPIView(APIView):
         #  Generate new token
         token = uuid.uuid4().hex
 
-        # Store token → invite data
+        # Store token - invite data
         cache.set(
             f"user_invite:{token}",
             {
@@ -238,7 +250,7 @@ class InviteUserAPIView(APIView):
             timeout=self.INVITE_TTL,
         )
 
-        # Store email → token mapping
+        # Store email - token mapping
         cache.set(
             email_key,
             token,
@@ -314,7 +326,7 @@ class ForgotPasswordAPIView(APIView):
             token_key = f"password_reset:{existing_token}"
 
             if cache.get(token_key):
-                # Valid reset already exists → do NOT resend
+                # Valid reset already exists - do NOT resend
                 return Response(
                     {
                         "status": "success",
@@ -324,7 +336,7 @@ class ForgotPasswordAPIView(APIView):
                     status=status.HTTP_200_OK,
                 )
             else:
-                # Stale mapping → cleanup
+                # Stale mapping - cleanup
                 cache.delete(user_token_key)
 
         # Generate new token
