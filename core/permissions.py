@@ -43,130 +43,191 @@ class IsTenantAdminOrSuperAdmin(BasePermission):
             ]
         )
 
-class IsAdminOrSelf(BasePermission):
-    """
-    Allows access if user is admin OR accessing their own object.
-    Assumes the object has `id` attribute.
-    """
-
-    def has_object_permission(self, request, view, obj):
-        if request.user.role == UserRoleChoices.ADMIN:
-            return True
-
-        return obj == request.user
-
 class CanViewTask(BasePermission):
     """
-    Admin: can view all tasks
-    User: can view only tasks assigned to them
+    SUPER_ADMIN:
+        - no access
+    TENANT_ADMIN:
+        - can view all tasks
+    USER:
+        - can view tasks they own or are assigned to
     """
+
+    def has_permission(self, request, view):
+        return request.user.role != UserRoleChoices.SUPER_ADMIN
 
     def has_object_permission(self, request, view, obj):
         user = request.user
 
-        if user.role == UserRoleChoices.ADMIN:
+        if user.role == UserRoleChoices.TENANT_ADMIN:
             return True
 
-        return obj.assignee == user
+        if user.role == UserRoleChoices.USER:
+            return obj.owner == user or obj.assignee == user
+
+        return False
+
+class CanCreateTask(BasePermission):
+    """
+    SUPER_ADMIN:
+        - no access
+    TENANT_ADMIN:
+        - can create tasks
+    USER:
+        - can create tasks
+    """
+
+    def has_permission(self, request, view):
+        if request.user.role == UserRoleChoices.SUPER_ADMIN:
+            return False
+
+        return True
 
 
 class CanUpdateTask(BasePermission):
     """
-    Admin: can update own tasks and tasks assigned to users
-    User: can update self tasks and tasks assigned to them
+    SUPER_ADMIN:
+        - no access
+    TENANT_ADMIN:
+        - can update any task
+    USER:
+        - can update tasks they own or are assigned to
     """
 
+    def has_permission(self, request, view):
+        if request.method not in ['PUT', 'PATCH']:
+            # Let CanViewTask handle GET, etc., or CanDeleteTask handle DELETE
+            return True
+        return request.user.role != UserRoleChoices.SUPER_ADMIN
+
     def has_object_permission(self, request, view, obj):
+        if request.method not in ['PUT', 'PATCH']:
+             return True
+             
         user = request.user
 
-        if user.role == UserRoleChoices.ADMIN:
-            return obj.owner == user
+        if user.role == UserRoleChoices.TENANT_ADMIN:
+            return True
 
-        return obj.assignee == user or obj.owner == user
+        if user.role == UserRoleChoices.USER:
+            return obj.owner == user or obj.assignee == user
+
+        return False
+
+
 
 
 class CanDeleteTask(BasePermission):
     """
-    User:
-        - can delete only self tasks (owner == assignee == user)
-
-    Admin:
-        - can delete only tasks owned by admin
+    SUPER_ADMIN:
+        - no access
+    TENANT_ADMIN:
+        - can delete any task
+    USER:
+        - can delete ONLY tasks they own
+        - cannot delete assigned tasks
     """
 
+    def has_permission(self, request, view):
+        if request.method != 'DELETE':
+             return True
+        return request.user.role != UserRoleChoices.SUPER_ADMIN
+
     def has_object_permission(self, request, view, obj):
+        # Ignore checks if not DELETE
+        if request.method != 'DELETE':
+             return True
+
         user = request.user
 
-        if user.role == UserRoleChoices.ADMIN:
-            return obj.owner == user
+        if user.role == UserRoleChoices.TENANT_ADMIN:
+            return True
 
-        return (
-            user.role == UserRoleChoices.USER
-            and obj.owner == user
-            and obj.assignee == user
-        )
+        if user.role == UserRoleChoices.USER:
+            return obj.owner == user  # only owner
+
+        return False
+
+
+
+
 
 
 class CanViewOrCreateComment(BasePermission):
     """
-    Admin:
-        - can comment/view only on tasks owned by admin
-    User:
-        - can comment/view on tasks they own OR are assigned to
+    Controls viewing & creating comments.
+    Supports checking permissions against a Task object OR a Comment object.
+    
+    If obj is Comment, it checks permission on obj.task.
     """
 
+    def has_permission(self, request, view):
+        # SUPER_ADMIN blocked globally
+        return request.user.role != UserRoleChoices.SUPER_ADMIN
+
     def has_object_permission(self, request, view, obj):
-        """
-        obj → Task
-        """
         user = request.user
 
-        if user.role == UserRoleChoices.ADMIN:
-            return obj.owner == user
+        if user.role == UserRoleChoices.TENANT_ADMIN:
+            return True
 
-        return obj.owner == user or obj.assignee == user
+        if user.role == UserRoleChoices.USER:
+            # Handle if obj is Comment, get the task
+            task = obj
+            if hasattr(obj, 'task'):
+                task = obj.task
+            
+            # Access logic: Must be Owner or Assignee of the TASK
+            return task.owner == user or task.assignee == user
+
+        return False
 
 
 class CanUpdateComment(BasePermission):
     """
-    User:
-        - can update their own comments
-    Admin:
-        - can update comments only on tasks owned by admin
+    Controls updating comments (object = Comment)
     """
+
+    def has_permission(self, request, view):
+        return request.user.role != UserRoleChoices.SUPER_ADMIN
 
     def has_object_permission(self, request, view, obj):
         """
-        obj → Comment
+        obj - Comment
         """
         user = request.user
-        task = obj.task
 
-        if user.role == UserRoleChoices.ADMIN:
-            return task.owner == user
+        if user.role == UserRoleChoices.TENANT_ADMIN:
+            return True
 
-        return obj.user == user
+        if user.role == UserRoleChoices.USER:
+            return obj.user == user
+
+        return False
 
 
 class CanDeleteComment(BasePermission):
     """
-    User:
-        - can delete their own comments
-    Admin:
-        - can delete comments only on tasks owned by admin
+    Controls deleting comments (object = Comment)
     """
+
+    def has_permission(self, request, view):
+        return request.user.role != UserRoleChoices.SUPER_ADMIN
 
     def has_object_permission(self, request, view, obj):
         """
-        obj → Comment
+        obj - Comment
         """
         user = request.user
-        task = obj.task
 
-        if user.role == UserRoleChoices.ADMIN:
-            return task.owner == user
+        if user.role == UserRoleChoices.TENANT_ADMIN:
+            return True
 
-        return obj.user == user
+        if user.role == UserRoleChoices.USER:
+            return obj.user == user
+
+        return False
+
     
 
 
@@ -175,19 +236,26 @@ class CanViewTaskHistory(BasePermission):
     Admin:
         - can view history of all tasks
     User:
-        - can view history only for tasks assigned to them
+        - can view history of tasks they own or are assigned to
     """
+
+    def has_permission(self, request, view):
+        return request.user.role != UserRoleChoices.SUPER_ADMIN
 
     def has_object_permission(self, request, view, obj):
         """
-        obj → Task
+        obj - Task
         """
         user = request.user
 
-        if user.role == UserRoleChoices.ADMIN:
+        if user.role == UserRoleChoices.SUPER_ADMIN:
+            return False
+
+        if user.role == UserRoleChoices.TENANT_ADMIN:
             return True
 
-        return obj.assignee == user
+
+        return obj.owner == user or obj.assignee == user
     
     
 class CanAccessUser(BasePermission):

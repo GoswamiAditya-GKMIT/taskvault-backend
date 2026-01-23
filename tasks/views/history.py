@@ -16,7 +16,12 @@ class TaskHistoryListAPIView(APIView):
     permission_classes = [IsAuthenticated, CanViewTaskHistory]
 
     def get(self, request, task_id):
-        task = get_object_or_404(Task, id=task_id, deleted_at__isnull=True)
+        task = get_object_or_404(
+            Task, 
+            id=task_id, 
+            organization=request.user.organization,
+            deleted_at__isnull=True
+        )
 
         # object-level permission
         self.check_object_permissions(request, task)
