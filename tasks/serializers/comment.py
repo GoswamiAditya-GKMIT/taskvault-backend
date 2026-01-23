@@ -33,6 +33,7 @@ class CommentCreateUpdateSerializer(serializers.Serializer):
         task = self.context["task"]
 
         return Comment.objects.create(
+            organization=request.user.organization,
             task=task,
             user=request.user,
             message=validated_data["message"]
