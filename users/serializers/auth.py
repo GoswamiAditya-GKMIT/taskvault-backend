@@ -28,16 +28,10 @@ class RegisterSerializer(serializers.Serializer):
     # -----------------------
 
     def validate_username(self,value):
-
          # user can not create account with the username which is deactivated using soft delete.add
         if User.objects.filter(username=value, deleted_at__isnull=False).exists():
             raise serializers.ValidationError(
                 "An account is registered with this username, but is deleted. Please contact the administrator for account recovery."
-            )
-        
-        if User.objects.filter(username=value).exists():
-            raise serializers.ValidationError(
-                "username already exists."
             )
         
         if value.isdigit():
@@ -54,32 +48,10 @@ class RegisterSerializer(serializers.Serializer):
         return value
 
     def validate_email(self, value):
-                
         if User.objects.filter(email=value, deleted_at__isnull=False).exists():
             raise serializers.ValidationError(
                 "An account is registered with this email address, but is deleted. Please contact the administrator for account recovery."
             )
-        
-        # Block verified users
-        if User.objects.filter(
-            email=value,
-            is_email_verified=True,
-            deleted_at__isnull=True
-        ).exists():
-            raise serializers.ValidationError(
-                "A user with this email already exists."
-            )
-
-        # block multiple pending users
-        if User.objects.filter(
-            email=value,
-            is_email_verified=False,
-            deleted_at__isnull=True
-        ).exists():
-            raise serializers.ValidationError(
-                "User verification is already pending for this email."
-            )
-
         return value
     
     def validate_first_name(self ,value):
@@ -103,6 +75,9 @@ class RegisterSerializer(serializers.Serializer):
     def validate(self, attrs):
         request = self.context["request"]
         tenant_id = request.parser_context["kwargs"].get("tenant_id")
+        
+        email = attrs.get("email")
+        username = attrs.get("username")
 
         # Confirm password check
         if attrs["password"] != attrs["confirm_password"]:
@@ -125,7 +100,37 @@ class RegisterSerializer(serializers.Serializer):
                 {"organization": "Invalid or inactive organization."}
             )
 
+        # Uniqueness & Stale User Logic
+
+        existing_user_by_email = User.objects.filter(email=email, deleted_at__isnull=True).first()
+        existing_user_by_username = User.objects.filter(username=username, deleted_at__isnull=True).first()
+
+        stale_user = None
+
+        if existing_user_by_email:
+            # Check if Verified
+            if existing_user_by_email.is_email_verified:
+                 raise serializers.ValidationError({"email": "A user with this email already exists."})
+            
+            # Check Token Active
+            token_key = f"user_verification_active_token:{existing_user_by_email.id}"
+            if cache.get(token_key):
+                 raise serializers.ValidationError({"email": "User verification is already pending for this email."})
+            
+            # If we reach here -> Stale User Found
+            stale_user = existing_user_by_email
+
+        # If username exists, it MUST belong to the stale user (if any)
+        if existing_user_by_username:
+            if stale_user and existing_user_by_username.id == stale_user.id:
+                pass # Reusing same username for same stale account -> OK
+            else:
+                raise serializers.ValidationError({"username": "username already exists."})
+
+        # Logic: If stale_user found, we allow it.
+        
         attrs["organization"] = organization
+        self.context["stale_user"] = stale_user
         return attrs
 
     # -----------------------
@@ -136,21 +141,38 @@ class RegisterSerializer(serializers.Serializer):
         validated_data.pop("confirm_password")
         password = validated_data.pop("password")
         organization = validated_data.pop("organization")
+        
+        stale_user = self.context.get("stale_user")
 
-        user = User(
-            email=validated_data["email"],
-            username=validated_data["username"],
-            first_name=validated_data["first_name"],
-            last_name=validated_data["last_name"],
-            role=UserRoleChoices.USER,
-            organization=organization,
-            is_email_verified=False,
-            is_active=False,
-        )
-        user.set_password(password)
-        user.save()
-
-        return user
+        if stale_user:
+            # OVERRIDE
+            user = stale_user
+            user.username = validated_data["username"]
+            user.first_name = validated_data["first_name"]
+            user.last_name = validated_data["last_name"]
+            user.email = validated_data["email"] 
+            user.organization = organization
+            user.role = UserRoleChoices.USER 
+            user.is_active = False
+            user.is_email_verified = False
+            user.set_password(password)
+            user.save()
+            return user
+        else:
+            # CREATE NEW
+            user = User(
+                email=validated_data["email"],
+                username=validated_data["username"],
+                first_name=validated_data["first_name"],
+                last_name=validated_data["last_name"],
+                role=UserRoleChoices.USER,
+                organization=organization,
+                is_email_verified=False,
+                is_active=False,
+            )
+            user.set_password(password)
+            user.save()
+            return user
     
 
 class LoginSerializer(serializers.Serializer):
@@ -179,7 +201,10 @@ class LoginSerializer(serializers.Serializer):
             raise PermissionDenied("User account inactive.")
 
         if user.organization and (user.organization.deleted_at or not user.organization.is_active):
-            raise PermissionDenied("Your organization is no longer active.")
+             if user.role == UserRoleChoices.TENANT_ADMIN:
+                  raise PermissionDenied("Your organization is deactivated please contact super admin to reactive the organization")
+             else:
+                  raise PermissionDenied("Your organization is deactivated")
 
         otp_cache_key = f"login_otp:{user.id}"
         cooldown_key = f"login_otp_cooldown:{user.id}"
@@ -434,7 +459,10 @@ class LoginOTPVerifySerializer(serializers.Serializer):
         cache.delete(cache_key)
 
         if user.organization and (user.organization.deleted_at or not user.organization.is_active):
-            raise AuthenticationFailed("Your organization is no longer active.")
+             if user.role == UserRoleChoices.TENANT_ADMIN:
+                  raise AuthenticationFailed("Your organization is deactivated please contact super admin to reactive the organization")
+             else:
+                  raise AuthenticationFailed("Your organization is deactivated")
 
         attrs["user"] = user
         return attrs
