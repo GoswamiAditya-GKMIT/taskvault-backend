@@ -18,43 +18,62 @@ class IsSuperAdmin(BasePermission):
 
 class IsTenantAdmin(BasePermission):
     """
-    Allows access only to admin users.
+    Allows access only to admin users of an ACTIVE organization.
     """
 
     def has_permission(self, request, view):
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.role == UserRoleChoices.TENANT_ADMIN
-        )
+        user = request.user
+        if not (user and user.is_authenticated and user.role == UserRoleChoices.TENANT_ADMIN):
+            return False
+        
+        # Block if Org is inactive
+        if user.organization and not user.organization.is_active:
+            return False
+            
+        return True
 
 class IsTenantAdminOrSuperAdmin(BasePermission):
     """
     Allows access to both SUPER_ADMIN and TENANT_ADMIN users.
+    TENANT_ADMIN blocked if organization is inactive.
     """
 
     def has_permission(self, request, view):
-        return (
-            request.user and 
-            request.user.is_authenticated and 
-            request.user.role in [
-                UserRoleChoices.SUPER_ADMIN, 
-                UserRoleChoices.TENANT_ADMIN
-            ]
-        )
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+
+        if user.role == UserRoleChoices.SUPER_ADMIN:
+             return True
+
+        if user.role == UserRoleChoices.TENANT_ADMIN:
+            # Block if Org is inactive
+            if user.organization and not user.organization.is_active:
+                return False
+            return True
+            
+        return False
 
 class CanViewTask(BasePermission):
     """
     SUPER_ADMIN:
         - no access
     TENANT_ADMIN:
-        - can view all tasks
+        - can view all tasks (if Org is active)
     USER:
-        - can view tasks they own or are assigned to
+        - can view tasks they own or are assigned to (if Org is active)
     """
 
     def has_permission(self, request, view):
-        return request.user.role != UserRoleChoices.SUPER_ADMIN
+        user = request.user
+        if user.role == UserRoleChoices.SUPER_ADMIN:
+            return False
+        
+        # Block if Org is inactive
+        if user.organization and not user.organization.is_active:
+            return False
+
+        return True
 
     def has_object_permission(self, request, view, obj):
         user = request.user
@@ -72,13 +91,18 @@ class CanCreateTask(BasePermission):
     SUPER_ADMIN:
         - no access
     TENANT_ADMIN:
-        - can create tasks
+        - can create tasks (if Org is active)
     USER:
-        - can create tasks
+        - can create tasks (if Org is active)
     """
 
     def has_permission(self, request, view):
-        if request.user.role == UserRoleChoices.SUPER_ADMIN:
+        user = request.user
+        if user.role == UserRoleChoices.SUPER_ADMIN:
+            return False
+
+        # Block if Org is inactive
+        if user.organization and not user.organization.is_active:
             return False
 
         return True

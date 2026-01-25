@@ -4,6 +4,7 @@ from core.choices import UserRoleChoices
 from django.contrib.auth.password_validation import validate_password
 from users.models import Organization
 from .organization import OrganizationSerializer
+from django.core.cache import cache
 
 User = get_user_model()
 
@@ -24,34 +25,11 @@ class UserCreateSerializer(serializers.Serializer):
         return value
     
     def validate_email(self, value):
-
         value = value.lower()
-                
         if User.objects.filter(email=value, deleted_at__isnull=False).exists():
             raise serializers.ValidationError(
                 "An account is registered with this email address, but is deleted. Please contact the administrator for account recovery."
             )
-        
-        # Block verified users
-        if User.objects.filter(
-            email=value,
-            is_email_verified=True,
-            deleted_at__isnull=True
-        ).exists():
-            raise serializers.ValidationError(
-                "A user with this email already exists."
-            )
-
-        # block multiple pending users
-        if User.objects.filter(
-            email=value,
-            is_email_verified=False,
-            deleted_at__isnull=True
-        ).exists():
-            raise serializers.ValidationError(
-                "User verification is already pending for this email."
-            )
-
         return value
     
     def validate_first_name(self ,value):
@@ -66,10 +44,8 @@ class UserCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Username cannot consist of only numbers.")
 
         existing_user = User.objects.filter(username__iexact=value).first()
-        if existing_user:
-            if existing_user.deleted_at is not None:
-                raise serializers.ValidationError("Account is deleted. Contact admin.")
-            raise serializers.ValidationError("Username already exists.")
+        if existing_user and existing_user.deleted_at is not None:
+             raise serializers.ValidationError("Account is deleted. Contact admin.")
             
         return value
         
@@ -84,6 +60,9 @@ class UserCreateSerializer(serializers.Serializer):
     def validate(self, attrs):
         request = self.context["request"]
         creator = request.user
+        
+        email = attrs.get("email").lower()
+        username = attrs.get("username")
 
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError(
@@ -106,7 +85,35 @@ class UserCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 {"organization_id": "Not allowed."}
             )
+    
+        # ---------------------------------------------------
+        # Uniqueness & Stale User Logic
+        
+        existing_user_by_email = User.objects.filter(email=email, deleted_at__isnull=True).first()
+        existing_user_by_username = User.objects.filter(username__iexact=username, deleted_at__isnull=True).first()
 
+        stale_user = None
+
+        if existing_user_by_email:
+            # Check if Verified
+            if existing_user_by_email.is_email_verified:
+                 raise serializers.ValidationError({"email": "A user with this email already exists."})
+            
+            # Check Token Active
+            token_key = f"user_verification_active_token:{existing_user_by_email.id}"
+            if cache.get(token_key):
+                 raise serializers.ValidationError({"email": "User verification is already pending for this email."})
+            
+            
+            stale_user = existing_user_by_email
+
+        if existing_user_by_username:
+            if stale_user and existing_user_by_username.id == stale_user.id:
+                pass 
+            else:
+                raise serializers.ValidationError({"username": "Username already exists."})
+
+        self.context["stale_user"] = stale_user
         return attrs
 
     def create(self, validated_data):
@@ -125,12 +132,10 @@ class UserCreateSerializer(serializers.Serializer):
             try:
                 organization = Organization.objects.get(id=org_id)
             except Organization.DoesNotExist:
-                # Raise validation error if ID is not found
                 raise serializers.ValidationError({
                     "organization_id": "No organization found with the provided ID."
                 })
             
-            # Block creation if Org is deactivated
             if not organization.is_active:
                  raise serializers.ValidationError({
                     "organization_id": "Cannot create Tenant Admin for a deactivated organization."
@@ -142,21 +147,37 @@ class UserCreateSerializer(serializers.Serializer):
             organization = creator.organization
             role = UserRoleChoices.USER
 
-        user = User(
-            username=validated_data["username"],
-            first_name=validated_data["first_name"],
-            last_name=validated_data["last_name"],
-            email=validated_data["email"],
-            role=role,
-            organization=organization,
-            is_email_verified=False,
-            is_active=False,
-        )
+        stale_user = self.context.get("stale_user")
 
-        user.set_password(password)
-        user.save()
-
-        return user
+        if stale_user:
+            # OVERWRITE
+            user = stale_user
+            user.username = validated_data["username"]
+            user.first_name = validated_data["first_name"]
+            user.last_name = validated_data["last_name"]
+            user.email = validated_data["email"]
+            user.role = role
+            user.organization = organization
+            user.is_email_verified = False 
+            user.is_active = False 
+            user.set_password(password)
+            user.save()
+            return user
+        else:
+            # CREATE NEW
+            user = User(
+                username=validated_data["username"],
+                first_name=validated_data["first_name"],
+                last_name=validated_data["last_name"],
+                email=validated_data["email"],
+                role=role,
+                organization=organization,
+                is_email_verified=False,
+                is_active=False,
+            )
+            user.set_password(password)
+            user.save()
+            return user
 
 class UserListDetailSerializer(serializers.ModelSerializer):
 
@@ -288,14 +309,28 @@ class InviteUserSerializer(serializers.Serializer):
                 "Tenant admin must belong to an organization."
             )
 
-        #  Block already verified users
-        if User.objects.filter(
+        #  Check for existing user
+        existing_user = User.objects.filter(
             email=attrs["email"],
             deleted_at__isnull=True,
-        ).exists():
-            raise serializers.ValidationError(
-                "A verified user with this email already exists."
-            )
+        ).first()
+
+        if existing_user:
+            # Block Verified
+            if existing_user.is_email_verified:
+                raise serializers.ValidationError(
+                    "A verified user with this email already exists."
+                )
+            
+            # Block Pending (Active Token)
+            token_key = f"user_verification_active_token:{existing_user.id}"
+            if cache.get(token_key):
+                 raise serializers.ValidationError(
+                    "User verification is already pending for this email."
+                )
+            
+            # Allow Stale (Unverified + No Token) -> Proceed to send invite which will overwrite on accept
+            pass
 
         return attrs
     

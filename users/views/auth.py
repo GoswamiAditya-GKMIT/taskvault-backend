@@ -319,16 +319,43 @@ class InviteRegisterAPIView(APIView):
 
         organization = Organization.objects.get(id=invite_data["organization_id"])
 
-        user = User(
-            email=invite_data["email"],
-            username=serializer.validated_data["username"],
-            first_name=serializer.validated_data["first_name"],
-            last_name=serializer.validated_data["last_name"],
-            role=invite_data["role"],
-            organization=organization,
-            is_email_verified=False,
-            is_active=False,
-        )
+        # Check for existing user (Override Logic)
+        existing_user = User.objects.filter(email=invite_data["email"], deleted_at__isnull=True).first()
+        
+        user = None
+
+        if existing_user:
+             # Safety Check: Should correspond to what InviteUserSerializer allowed
+             if existing_user.is_email_verified:
+                 return Response({"status": "failed", "message": "User with this email is already verified."}, status=status.HTTP_400_BAD_REQUEST)
+             
+             # Block Pending (Active Token)
+             token_key = f"user_verification_active_token:{existing_user.id}"
+             
+             if cache.get(token_key):
+                 return Response({"status": "failed", "message": "User verification is already pending for this email."}, status=status.HTTP_400_BAD_REQUEST)
+             
+             # If stale , overwrite
+             user = existing_user
+             user.username = serializer.validated_data["username"]
+             user.first_name = serializer.validated_data["first_name"]
+             user.last_name = serializer.validated_data["last_name"]
+             user.role = invite_data["role"]
+             user.organization = organization
+             user.is_email_verified = False 
+             user.is_active = False
+        else:
+            # Create New
+            user = User(
+                email=invite_data["email"],
+                username=serializer.validated_data["username"],
+                first_name=serializer.validated_data["first_name"],
+                last_name=serializer.validated_data["last_name"],
+                role=invite_data["role"],
+                organization=organization,
+                is_email_verified=False,
+                is_active=False,
+            )
 
         user.set_password(serializer.validated_data["password"])
         user.save()
