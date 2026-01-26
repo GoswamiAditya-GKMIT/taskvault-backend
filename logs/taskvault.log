@@ -1,2 +1,0 @@
-{"timestamp": "2026-01-26T16:55:08.874914", "level": "WARNING", "message": "HEAD /api/v1/subscriptions/orders/ - 401 (2ms)", "logger": "taskvault.request", "request_id": "cd56d0e2-e76d-4eb3-b82a-03b12d705b6f", "tenant_id": "N/A", "user_id": null, "execution_time_ms": 2}
-{"timestamp": "2026-01-26T16:57:36.449769", "level": "WARNING", "message": "POST /api/v1/auth/tenant/4fb26f43-378f-4e58-ac2e-60bc4366ced5/register/ - 400 (69ms)", "logger": "taskvault.request", "request_id": "c9db2a31-1b40-4faa-94c3-1e8fb885becf", "tenant_id": "N/A", "user_id": null, "execution_time_ms": 69}
