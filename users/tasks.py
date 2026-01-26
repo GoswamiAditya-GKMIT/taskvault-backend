@@ -1,5 +1,11 @@
 from celery import shared_task
 from django.core.mail import send_mail
+from django.utils import timezone
+from datetime import timedelta
+from django.contrib.auth import get_user_model
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
+
+User = get_user_model()
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), retry_kwargs={"max_retries": 3, "countdown": 10})
@@ -68,3 +74,32 @@ def send_verification_link_email(self, email, link):
         recipient_list=[email],
         fail_silently=False,
     )
+
+
+@shared_task
+def hard_delete_unverified_users():
+    """
+    Task to hard delete users who haven't verified their email within 7 days.
+    """
+    threshold = timezone.now() - timedelta(days=7)
+    unverified_users = User.objects.filter(
+        is_email_verified=False,
+        date_joined__lt=threshold
+    )
+    count = unverified_users.count()
+    unverified_users.delete()
+    return f"Hard deleted {count} unverified users."
+
+
+@shared_task
+def clear_blacklisted_tokens():
+    """
+    Purge expired blacklisted tokens from the database.
+    This uses functionality provided by djangorestframework-simplejwt correctly.
+    """
+    # Flushes expired tokens from the database
+    # OutstandingToken objects where expires_at < now
+    now = timezone.now()
+    expired_count = OutstandingToken.objects.filter(expires_at__lt=now).count()
+    OutstandingToken.objects.filter(expires_at__lt=now).delete()
+    return f"Purged {expired_count} expired tokens."

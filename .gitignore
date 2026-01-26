@@ -25,6 +25,6 @@ env/
 .pytest_cache/
 celerybeat-schedule*
 .vscode/
-logs/
-taskvault.log
 scripts/
+logs/
+celerybeat-schedule*

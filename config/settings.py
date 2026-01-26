@@ -167,6 +167,18 @@ CELERY_BEAT_SCHEDULE = {
         "task": "subscriptions.tasks.reconcile_pending_subscriptions_job",
         "schedule": 3600.0,  # Every 60 minutes
     },
+    "hard_delete_unverified_users": {
+        "task": "users.tasks.hard_delete_unverified_users",
+        "schedule": 86400.0,  # Every 24 hours
+    },
+    "clear_blacklisted_tokens": {
+        "task": "users.tasks.clear_blacklisted_tokens",
+        "schedule": 86400.0,  # Every 24 hours
+    },
+    "delete_old_logs": {
+        "task": "core.tasks.delete_old_logs",
+        "schedule": 2592000.0,  # Every 30 days
+    },
 }
 
 AUTH_USER_MODEL = "users.User"
