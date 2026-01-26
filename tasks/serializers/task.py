@@ -6,6 +6,7 @@ from django.db.models import functions
 from django.utils import timezone
 from users.serializers import UserMiniDetailSerializer
 from core.choices import TaskStatusChoices, TaskPriorityChoices
+from django.conf import settings
 
 
 User = get_user_model()
@@ -64,6 +65,18 @@ class TaskCreateSerializer(serializers.Serializer):
         request = self.context["request"]
         user = request.user
         organization = user.organization
+
+        # 0. Check for Task Limit (Free Tier)
+        if not organization.is_premium:
+             active_task_count = Task.objects.filter(
+                 organization=organization,
+                 deleted_at__isnull=True
+             ).count()
+             
+             if active_task_count >= getattr(settings, "FREE_TIER_TASK_LIMIT", 100):
+                 raise serializers.ValidationError({
+                     "detail": "You have a free tier, upgrade to premium to create more than 100 tasks."
+                 })
 
         # 1. Block Super Admin
         if user.role == UserRoleChoices.SUPER_ADMIN:
