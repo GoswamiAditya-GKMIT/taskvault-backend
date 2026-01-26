@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Failed - TaskVault</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #fafafa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .box {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            text-align: center;
+            width: 350px;
+        }
+
+        .err {
+            color: #dc2626;
+            background: #fff5f5;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="box">
+        <h3 style="color: #dc2626;">Payment Failed</h3>
+        <p>The transaction could not be completed.</p>
+        <div class="err">Reason: {{ error }}</div>
+        <p style="font-size: 0.85rem;"><a href="/subscriptions/upgrade/">Click here to try again</a></p>
+    </div>
+</body>
+
+</html>
