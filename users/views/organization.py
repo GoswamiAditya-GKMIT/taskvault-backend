@@ -87,7 +87,7 @@ class OrganizationDetailAPIView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    def put(self, request, id):
+    def _update(self, request, id):
         organization = self.get_object(id)
         if not organization:
             return Response(
@@ -108,6 +108,12 @@ class OrganizationDetailAPIView(APIView):
             status=status.HTTP_200_OK,
         )
 
+    def put(self, request, id):
+        return self._update(request, id)
+
+    def patch(self, request, id):
+        return self._update(request, id)
+
     def delete(self, request, id):
         organization = self.get_object(id)
         if not organization:
@@ -116,26 +122,14 @@ class OrganizationDetailAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Constraint: Cannot delete if users exist
-        if organization.users.filter(deleted_at__isnull=True).exists():
-             return Response(
-                {
-                    "status": "failed",
-                    "message": "Cannot delete organization with associated users. Please remove them first.",
-                    "data": None,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Soft delete
-        organization.deleted_at = timezone.now()
-        organization.is_active = False # Deactivate as well
+        # Simply use is_active=False
+        organization.is_active = False
         organization.save()
 
         return Response(
             {
                 "status": "success",
-                "message": "Organization deleted successfully.",
+                "message": "Organization deactivated successfully.",
                 "data": None,
             },
             status=status.HTTP_200_OK,
