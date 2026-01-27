@@ -9,7 +9,7 @@ from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from core.choices import UserRoleChoices
 from users.models import Organization
 from django.core.cache import cache
-from core.constants import CACHE_TIMEOUT , RESEND_TIME
+from core.constants import OTP_CACHE_TIMEOUT , RESEND_OTP_TIME
 from users.tasks import send_user_verification_otp
 from core.utils import generate_otp
 
@@ -221,9 +221,9 @@ class LoginSerializer(serializers.Serializer):
             otp = cached["otp"]
         else:
             otp = generate_otp()
-            cache.set(otp_cache_key, {"otp": otp}, timeout=CACHE_TIMEOUT)
+            cache.set(otp_cache_key, {"otp": otp}, timeout=OTP_CACHE_TIMEOUT)
 
-        cache.set(cooldown_key, True, timeout=RESEND_TIME)
+        cache.set(cooldown_key, True, timeout=RESEND_OTP_TIME)
 
         send_user_verification_otp.delay(user.email, otp)
 

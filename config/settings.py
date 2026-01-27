@@ -186,4 +186,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+FRONETEND_EMAIL_VERIFICATION_PATH="/verify-email"
+BASE_URL = os.getenv("BASE_URL")
+FRONETEND_PASSWORD_RESET_PATH="/auth/reset-password/"
+
+INIVTE_LINK=os.getenv("REGISTER_INVITE_LINK_PATH")
+
 STATIC_URL = 'static/'
