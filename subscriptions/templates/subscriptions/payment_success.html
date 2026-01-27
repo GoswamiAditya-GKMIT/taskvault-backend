@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Success - TaskVault</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #fafafa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .box {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            text-align: center;
+            width: 350px;
+        }
+
+        .msg {
+            color: #15803d;
+            font-weight: bold;
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+
+        .info {
+            font-size: 0.9rem;
+            color: #666;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: left;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="box">
+        <div class="msg">Payment Successful</div>
+        <p>Premium features are now active for your organization.</p>
+        <div class="info">
+            ID: {{ payment_id }}<br>
+            Status: Verified
+        </div>
+    </div>
+</body>
+
+</html>

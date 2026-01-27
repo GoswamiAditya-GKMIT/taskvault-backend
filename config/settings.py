@@ -14,6 +14,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 from datetime import timedelta
 from rest_framework.permissions import IsAuthenticated
+from core.constants import (
+    PREMIUM_PLAN_AMOUNT_IN_PAISA,
+    PREMIUM_PLAN_CURRENCY_CODE,
+    FREE_TIER_TASK,
+)
+
 
 
 load_dotenv()
@@ -47,6 +53,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'users',
     'tasks',
+    'subscriptions',
 ]
 
 MIDDLEWARE = [
@@ -154,6 +161,13 @@ CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 
+CELERY_BEAT_SCHEDULE = {
+    "reconcile_pending_subscriptions": {
+        "task": "subscriptions.tasks.reconcile_pending_subscriptions_job",
+        "schedule": 3600.0,  # Every 60 minutes
+    },
+}
+
 AUTH_USER_MODEL = "users.User"
 
 # EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
@@ -194,3 +208,16 @@ FRONETEND_PASSWORD_RESET_PATH="/auth/reset-password/"
 INIVTE_LINK=os.getenv("REGISTER_INVITE_LINK_PATH")
 
 STATIC_URL = 'static/'
+
+# Razorpay Settings
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+
+# Premium Plan Settings
+# 1000 INR = 100000 Paise
+PREMIUM_PLAN_AMOUNT = PREMIUM_PLAN_AMOUNT_IN_PAISA
+PREMIUM_PLAN_CURRENCY = PREMIUM_PLAN_CURRENCY_CODE
+
+# 100 tasks limit for free tier
+FREE_TIER_TASK_LIMIT = FREE_TIER_TASK

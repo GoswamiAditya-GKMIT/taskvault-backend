@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upgrade - TaskVault</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #fafafa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            color: #333;
+        }
+
+        .box {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            text-align: center;
+            width: 350px;
+        }
+
+        .price {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin: 1rem 0;
+        }
+
+        .btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        #loading {
+            display: none;
+            margin-top: 10px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="box">
+        <h3>Upgrade to Premium</h3>
+        <p>Organization Lifetime Access</p>
+        <div class="price">₹{{ amount }}</div>
+
+        <button id="pay-btn" class="btn" onclick="startPayment()">Pay Securely</button>
+        <div id="loading">Establishing connection...</div>
+    </div>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+        async function startPayment() {
+            const btn = document.getElementById('pay-btn');
+            const loader = document.getElementById('loading');
+            btn.style.display = 'none';
+            loader.style.display = 'block';
+
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const token = urlParams.get('token') || sessionStorage.getItem('access_token');
+
+                const response = await fetch('/api/v1/subscriptions/orders/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (data.status !== 'success') {
+                    alert('Error: ' + data.message);
+                    btn.style.display = 'block'; loader.style.display = 'none';
+                    return;
+                }
+
+                const options = {
+                    "key": data.data.razorpay_key_id,
+                    "amount": data.data.amount,
+                    "currency": data.data.currency,
+                    "name": "TaskVault",
+                    "order_id": data.data.order_id,
+                    "callback_url": window.location.origin + "/subscriptions/callback/?token=" + encodeURIComponent(token),
+                    "redirect": true,
+                    "prefill": { "name": "Test User", "email": "test@example.com" },
+                    "theme": { "color": "#2563eb" }
+                };
+
+                new Razorpay(options).open();
+            } catch (error) {
+                alert('Connection error');
+                btn.style.display = 'block'; loader.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+
+</html>
