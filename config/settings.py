@@ -179,6 +179,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "core.tasks.delete_old_logs",
         "schedule": 2592000.0,  # Every 30 days
     },
+    "hard_delete_soft_deleted_users": {
+        "task": "users.tasks.hard_delete_soft_deleted_users",
+        "schedule": 86400.0,  # Every 24 hours
+    },
 }
 
 AUTH_USER_MODEL = "users.User"
