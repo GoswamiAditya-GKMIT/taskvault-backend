@@ -38,7 +38,7 @@ class TaskCommentListCreateAPIView(APIView):
         queryset = Comment.objects.filter(
             task=task,
             deleted_at__isnull=True
-        )
+        ).order_by("-created_at")
 
         paginator = DefaultPagination()
         page = paginator.paginate_queryset(queryset, request)

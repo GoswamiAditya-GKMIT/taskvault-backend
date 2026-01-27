@@ -70,7 +70,7 @@ class UserListCreateAPIView(APIView):
 
     # ---------- GET /users ----------
     def get(self, request):
-        queryset = self.get_queryset(request).order_by("first_name", "last_name")
+        queryset = self.get_queryset(request).order_by("-created_at")
 
         paginator = DefaultPagination()
         page = paginator.paginate_queryset(queryset, request)
