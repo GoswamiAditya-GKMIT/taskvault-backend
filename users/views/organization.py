@@ -7,6 +7,7 @@ from core.permissions import IsSuperAdmin
 from users.serializers import OrganizationSerializer
 from core.pagination import DefaultPagination
 from users.models import Organization
+from django.db.models import Count, Q
 from django.utils import timezone
 
 
@@ -17,6 +18,10 @@ class OrganizationCreateAPIView(APIView):
         queryset = (
             Organization.objects
             .filter(deleted_at__isnull=True)
+            .annotate(
+                total_active_task_count=Count('tasks', filter=Q(tasks__deleted_at__isnull=True), distinct=True),
+                total_active_user_count=Count('users', filter=Q(users__deleted_at__isnull=True), distinct=True),
+            )
             .order_by("name")
         )
 
@@ -27,7 +32,7 @@ class OrganizationCreateAPIView(APIView):
 
         response_data = {
             "status": "success",
-            "message": "Users retrieved successfully",
+            "message": "Organizations retrieved successfully",
             "data": serializer.data,
         }
 
@@ -35,7 +40,6 @@ class OrganizationCreateAPIView(APIView):
 
         return Response(response_data, status=status.HTTP_200_OK)
     
-
     def post(self, request):
         serializer = OrganizationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -57,7 +61,11 @@ class OrganizationDetailAPIView(APIView):
 
     def get_object(self, id):
         try:
-            return Organization.objects.get(id=id, deleted_at__isnull=True)
+             # Annotate single object fetch as well
+            return Organization.objects.annotate(
+                total_active_task_count=Count('tasks', filter=Q(tasks__deleted_at__isnull=True), distinct=True),
+                total_active_user_count=Count('users', filter=Q(users__deleted_at__isnull=True), distinct=True),
+            ).get(id=id, deleted_at__isnull=True)
         except Organization.DoesNotExist:
             return None
 

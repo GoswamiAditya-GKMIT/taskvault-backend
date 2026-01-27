@@ -4,6 +4,9 @@ from users.models import Organization
 
 
 class OrganizationSerializer(serializers.ModelSerializer):
+    total_active_task_count = serializers.IntegerField(read_only=True)
+    total_active_user_count = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Organization
         fields = "__all__"
