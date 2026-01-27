@@ -60,58 +60,54 @@ class UserCreateSerializer(serializers.Serializer):
     def validate(self, attrs):
         request = self.context["request"]
         creator = request.user
-        
-        email = attrs.get("email").lower()
+
+        errors = {}
+
+        email = attrs.get("email", "").lower()
         username = attrs.get("username")
+        password = attrs.get("password")
+        confirm_password = attrs.get("confirm_password")
 
-        if attrs["password"] != attrs["confirm_password"]:
-            raise serializers.ValidationError(
-                {"confirm_password": ["Passwords do not match."]}
-            )
-        
-        # Regular users cannot create users
+        if password != confirm_password:
+            errors["confirm_password"] = ["Passwords do not match."]
+
         if creator.role == UserRoleChoices.USER:
-            raise serializers.ValidationError("You are not allowed to create users.")
+            errors["non_field_errors"] = ["You are not allowed to create users."]
 
-        # SUPER_ADMIN must provide organization_id
-        if creator.role == UserRoleChoices.SUPER_ADMIN:
-            if not attrs.get("organization_id"):
-                raise serializers.ValidationError(
-                    {"organization_id": "This field is required."}
-                )
+        if creator.role == UserRoleChoices.SUPER_ADMIN and not attrs.get("organization_id"):
+            errors["organization_id"] = ["This field is required."]
 
-        # TENANT_ADMIN cannot provide organization_id
         if creator.role == UserRoleChoices.TENANT_ADMIN and attrs.get("organization_id"):
-            raise serializers.ValidationError(
-                {"organization_id": "Not allowed."}
-            )
-    
-        # ---------------------------------------------------
-        # Uniqueness & Stale User Logic
-        
-        existing_user_by_email = User.objects.filter(email=email, deleted_at__isnull=True).first()
-        existing_user_by_username = User.objects.filter(username__iexact=username, deleted_at__isnull=True).first()
+            errors["organization_id"] = ["Not allowed."]
+
+        existing_email_user = User.objects.filter(
+            email=email,
+            deleted_at__isnull=True
+        ).first()
 
         stale_user = None
 
-        if existing_user_by_email:
-            # Check if Verified
-            if existing_user_by_email.is_email_verified:
-                 raise serializers.ValidationError({"email": "A user with this email already exists."})
-            
-            # Check Token Active
-            token_key = f"user_verification_active_token:{existing_user_by_email.id}"
-            if cache.get(token_key):
-                 raise serializers.ValidationError({"email": "User verification is already pending for this email."})
-            
-            
-            stale_user = existing_user_by_email
-
-        if existing_user_by_username:
-            if stale_user and existing_user_by_username.id == stale_user.id:
-                pass 
+        if existing_email_user:
+            if existing_email_user.is_email_verified:
+                errors["email"] = ["A user with this email already exists."]
             else:
-                raise serializers.ValidationError({"username": "Username already exists."})
+                token_key = f"user_verification_active_token:{existing_email_user.id}"
+                if cache.get(token_key):
+                    errors["email"] = ["User verification is already pending for this email."]
+                else:
+                    stale_user = existing_email_user
+
+        existing_username_user = User.objects.filter(
+            username__iexact=username,
+            deleted_at__isnull=True
+        ).first()
+
+        if existing_username_user:
+            if not stale_user or existing_username_user.id != stale_user.id:
+                errors["username"] = ["Username already exists."]
+
+        if errors:
+            raise serializers.ValidationError(errors)
 
         self.context["stale_user"] = stale_user
         return attrs

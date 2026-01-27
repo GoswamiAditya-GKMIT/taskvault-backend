@@ -10,7 +10,7 @@ from django.core.exceptions import ValidationError
 from django.shortcuts import render
 from django.http import HttpResponse, Http404
 from django.contrib.auth.password_validation import validate_password
-
+from django.conf import settings
 
 from users.serializers import (
     UserListDetailSerializer,
@@ -18,15 +18,13 @@ from users.serializers import (
     UserCreateSerializer,
     InviteUserSerializer,
     ForgotPasswordSerializer
-
 )
 from core.permissions import IsTenantAdminOrSuperAdmin , IsTenantAdmin, CanAccessUser
 from core.pagination import DefaultPagination
 from users.services import soft_delete_user
-from core.utils import generate_otp
-from users.tasks import send_user_verification_otp , send_user_invite_email , send_password_reset_email, send_verification_link_email
+from users.tasks import send_user_invite_email , send_password_reset_email, send_verification_link_email
 from core.choices import UserRoleChoices
-from core.constants import CACHE_TIMEOUT , INVITE_LINK_EXPIRY , PASSWORD_RESET_TTL
+from core.constants import REGISTER_TOKEN_CACHE_TIMEOUT , INVITE_LINK_EXPIRY , PASSWORD_RESET_TTL , REGISTER_TOKEN_COOLDOWN_TIME ,RESET_PASSWORD_COOLDOWN_TIME
 
 
 User = get_user_model() 
@@ -46,13 +44,11 @@ class UserListCreateAPIView(APIView):
         user = request.user
         qs = User.objects.all()
 
-        # Filtering by active status
         active = request.query_params.get("active")
         if active:
             is_active = active.lower() == "true"
             qs = qs.filter(is_active=is_active)
 
-        # Filtering by deleted status
         deleted = request.query_params.get("deleted")
         if deleted and deleted.lower() == "true":
             qs = qs.filter(deleted_at__isnull=False)
@@ -104,15 +100,15 @@ class UserListCreateAPIView(APIView):
         # Generate Verification Token
         token = uuid.uuid4().hex
         
-        # Store token -> user_id in cache with 24h expiry
+        # Store token -> user_id in cache with expiry
         cache_key = f"user_verification_token:{token}"
         # Store user_id -> token for invalidation on resend
         user_token_key = f"user_verification_active_token:{user.id}"
 
-        cache.set(cache_key, user.id, timeout=86400) # 24 hours
-        cache.set(user_token_key, token, timeout=86400) 
+        cache.set(cache_key, user.id, timeout=REGISTER_TOKEN_CACHE_TIMEOUT) 
+        cache.set(user_token_key, token, timeout=REGISTER_TOKEN_CACHE_TIMEOUT) 
 
-        verification_link = f"http://localhost:3000/verify-email?token={token}"
+        verification_link = f"{settings.FRONTEND_URL}{settings.FRONETEND_EMAIL_VERIFICATION_PATH}?token={token}"
 
         send_verification_link_email.delay(user.email, verification_link)
 
@@ -120,7 +116,7 @@ class UserListCreateAPIView(APIView):
             {
                 "status": "success",
                 "message": "User created successfully. Verification link sent to email.",
-                "data": UserListDetailSerializer(user).data
+                "data": None
             },
             status=status.HTTP_201_CREATED,
         )
@@ -250,14 +246,13 @@ class InviteUserAPIView(APIView):
             timeout=self.INVITE_TTL,
         )
 
-        # Store email - token mapping
         cache.set(
             email_key,
             token,
             timeout=self.INVITE_TTL,
         )
 
-        invite_link = f"http://localhost:3000/invite/{token}"
+        invite_link = f"{settings.INIVTE_LINK}/{token}"
 
         send_user_invite_email.delay(email, invite_link)
 
@@ -278,7 +273,7 @@ class ForgotPasswordAPIView(APIView):
 
     permission_classes = []
 
-    RESET_TTL = PASSWORD_RESET_TTL  # 15 minutes
+    RESET_TTL = PASSWORD_RESET_TTL
 
     def post(self, request):
         serializer = ForgotPasswordSerializer(data=request.data)
@@ -315,7 +310,7 @@ class ForgotPasswordAPIView(APIView):
             )
         
         # Set cooldown
-        cache.set(cooldown_key, True, timeout=60)
+        cache.set(cooldown_key, True, timeout=RESET_PASSWORD_COOLDOWN_TIME)
 
         user_token_key = f"password_reset_user:{user.id}"
 
@@ -354,7 +349,7 @@ class ForgotPasswordAPIView(APIView):
             timeout=self.RESET_TTL,
         )
 
-        reset_link = f"http://localhost:8000/api/v1/auth/reset-password/{token}"
+        reset_link = f"{settings.BASE_URL}{settings.FRONETEND_PASSWORD_RESET_PATH}{token}"
 
         send_password_reset_email.delay(user.email, reset_link)
 
