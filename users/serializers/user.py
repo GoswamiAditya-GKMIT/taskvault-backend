@@ -28,7 +28,7 @@ class UserCreateSerializer(serializers.Serializer):
         value = value.lower()
         if User.objects.filter(email=value, deleted_at__isnull=False).exists():
             raise serializers.ValidationError(
-                "An account is registered with this email address, but is deleted. Please contact the administrator for account recovery."
+                "Account is deleted. Contact support."
             )
         return value
     
@@ -45,7 +45,7 @@ class UserCreateSerializer(serializers.Serializer):
 
         existing_user = User.objects.filter(username__iexact=value).first()
         if existing_user and existing_user.deleted_at is not None:
-             raise serializers.ValidationError("Account is deleted. Contact admin.")
+             raise serializers.ValidationError("Account is deleted. Contact support.")
             
         return value
         
@@ -305,17 +305,17 @@ class InviteUserSerializer(serializers.Serializer):
                 "Tenant admin must belong to an organization."
             )
 
+        
         #  Check for existing user
         existing_user = User.objects.filter(
             email=attrs["email"],
-            deleted_at__isnull=True,
         ).first()
 
         if existing_user:
             # Block Verified
             if existing_user.is_email_verified:
                 raise serializers.ValidationError(
-                    "A verified user with this email already exists."
+                    "A user with this email already exists."
                 )
             
             # Block Pending (Active Token)

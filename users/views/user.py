@@ -21,11 +21,15 @@ from users.serializers import (
 )
 from core.permissions import IsTenantAdminOrSuperAdmin , IsTenantAdmin, CanAccessUser
 from core.pagination import DefaultPagination
-from users.services import soft_delete_user
+from users.services import soft_delete_user, restore_user
 from users.tasks import send_user_invite_email , send_password_reset_email, send_verification_link_email
 from core.choices import UserRoleChoices
 from core.constants import REGISTER_TOKEN_CACHE_TIMEOUT , INVITE_LINK_EXPIRY , PASSWORD_RESET_TTL , REGISTER_TOKEN_COOLDOWN_TIME ,RESET_PASSWORD_COOLDOWN_TIME
 
+
+
+from django.utils import timezone
+from django.db import transaction
 
 User = get_user_model() 
 
@@ -168,15 +172,22 @@ class UserDetailUpdateDeleteAPIView(APIView):
             status=status.HTTP_200_OK,
         )
 
-    #To do - in future - admin can restore the user and all its attributes including the tasks and all
-            # or admin can allow to remove the user (hard delete) and recreate the new user 
-            # or can just use patch and remove all the associated item and pretend to be use the same existing user
-
     def delete(self, request, id):
         user = self.get_object(request, id)
-        
-        # Block Super Admin from deleting Tenant Admin of Deactivated Org
-        if request.user.role == UserRoleChoices.SUPER_ADMIN:
+        actor = request.user
+
+        if actor.id != user.id:
+            if actor.role == UserRoleChoices.SUPER_ADMIN:
+                if user.role != UserRoleChoices.TENANT_ADMIN:
+                     return Response({"status": "failed", "message": "Super Admin can only delete Tenant Admins."}, status=status.HTTP_403_FORBIDDEN)
+            elif actor.role == UserRoleChoices.TENANT_ADMIN:
+                if user.role != UserRoleChoices.USER:
+                     return Response({"status": "failed", "message": "Tenant Admin can only delete Users."}, status=status.HTTP_403_FORBIDDEN)
+                if user.organization != actor.organization:
+                     return Response({"status": "failed", "message": "Cross-tenant deletion not allowed."}, status=status.HTTP_403_FORBIDDEN)
+
+        # 2. Block Super Admin from deleting Tenant Admin of Deactivated Org
+        if actor.role == UserRoleChoices.SUPER_ADMIN:
             if user.role == UserRoleChoices.TENANT_ADMIN:
                 if user.organization and not user.organization.is_active:
                      return Response(
@@ -187,17 +198,49 @@ class UserDetailUpdateDeleteAPIView(APIView):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
-        soft_delete_user(user)
+        # 3. Atomic Soft Deletion
+        soft_delete_user(user, actor)
+
+        return Response(
+            status=status.HTTP_204_NO_CONTENT
+        )
+    
+
+
+class UserRestoreAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsTenantAdminOrSuperAdmin]
+
+    def post(self, request, id):
+        try:
+           user = User.objects.get(id=id)
+        except User.DoesNotExist:
+           return Response({"status": "failed", "message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        actor = request.user
+
+        if actor.role == UserRoleChoices.TENANT_ADMIN:
+            if user.role != UserRoleChoices.USER:
+                 return Response({"status": "failed", "message": "Tenant Admin can only restore Users"}, status=status.HTTP_400_BAD_REQUEST)
+            if not user.organization or user.organization != actor.organization:
+                 return Response({"status": "failed", "message": "User not found within your organization"}, status=status.HTTP_404_NOT_FOUND)
+        if not user.deleted_at:
+             return Response({"status": "failed", "message": "User is not deleted"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if actor.role == UserRoleChoices.SUPER_ADMIN:
+            if user.role != UserRoleChoices.TENANT_ADMIN:
+                 return Response({"status": "failed", "message": "Super Admin can only restore Tenant Admins"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Atomic Restoration
+        restore_user(user)
 
         return Response(
             {
                 "status": "success",
-                "message": "User deleted successfully",
-                "data": None,
+                "message": "User restored successfully",
+                "data": UserListDetailSerializer(user).data,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_200_OK
         )
-    
 
 
 # tenant admin create user invite link and send it through the email

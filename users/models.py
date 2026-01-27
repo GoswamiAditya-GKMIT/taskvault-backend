@@ -47,6 +47,12 @@ class User(AbstractUser):
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True , blank=True)
 
+    DELETED_BY_CHOICES = (
+        ('self', 'Self'),
+        ('admin', 'Admin'),
+    )
+    deleted_by = models.CharField(max_length=10, choices=DELETED_BY_CHOICES, null=True, blank=True)
+
     REQUIRED_FIELDS = ["email"]
     USERNAME_FIELD = "username"
 
