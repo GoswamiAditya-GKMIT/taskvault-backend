@@ -350,6 +350,11 @@ class ResendLoginOTPSerializer(serializers.Serializer):
         if not user.is_active:
              raise serializers.ValidationError("User account inactive.")
 
+        # FIX: Ensure an active OTP session exists (initiated by password login)
+        otp_cache_key = f"login_otp:{user.id}"
+        if not cache.get(otp_cache_key):
+             raise serializers.ValidationError("Session expired or invalid. Please login again.")
+
         attrs["user"] = user
         return attrs
 
