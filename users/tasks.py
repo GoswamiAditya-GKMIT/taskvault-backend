@@ -103,3 +103,24 @@ def clear_blacklisted_tokens():
     expired_count = OutstandingToken.objects.filter(expires_at__lt=now).count()
     OutstandingToken.objects.filter(expires_at__lt=now).delete()
     return f"Purged {expired_count} expired tokens."
+
+
+@shared_task
+def hard_delete_soft_deleted_users():
+    """
+    Hard delete users who self-deleted more than 7 days ago.
+    """
+    threshold = timezone.now() - timedelta(days=7)
+    
+    # Only target SELF-deleted users
+    users_to_delete = User.objects.filter(
+        deleted_at__lt=threshold,
+        deleted_by='self'
+    )
+    
+    count = users_to_delete.count()
+    if count > 0:
+        users_to_delete.delete() 
+        
+    return f"Hard deleted {count} self-deleted users."
+    
