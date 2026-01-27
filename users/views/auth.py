@@ -77,7 +77,7 @@ class LoginAPIView(APIView):
                 "message": "OTP sent to your email. Please verify to continue.",
                 "data": None,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_202_ACCEPTED,
         )
 
     
@@ -232,7 +232,7 @@ class ResendLoginOTPAPIView(APIView):
                 "message": "A new OTP has been sent to your email.",
                 "data": None,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_202_ACCEPTED,
         )
 
 
@@ -288,7 +288,7 @@ class ResendVerificationLinkAPIView(APIView):
                 "message": "Verification link has been resent to your email.",
                 "data": None,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_202_ACCEPTED,
         )
     
 

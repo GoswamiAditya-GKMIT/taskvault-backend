@@ -200,9 +200,6 @@ class TaskDetailUpdateDeleteAPIView(APIView):
 
         return Response(
             {
-                "status": "success",
-                "message": "Task deleted successfully",
-                "data": None,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_204_NO_CONTENT,
         )

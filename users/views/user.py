@@ -305,7 +305,7 @@ class InviteUserAPIView(APIView):
                 "message": "Invite link sent successfully.",
                 "data": None,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_202_ACCEPTED,
         )
 
 
@@ -337,7 +337,7 @@ class ForgotPasswordAPIView(APIView):
                     "message": "If the email exists, a reset link has been sent.",
                     "data": None,
                 },
-                status=status.HTTP_200_OK,
+                status=status.HTTP_202_ACCEPTED,
             )
 
         # Rate Limit Check
@@ -371,7 +371,7 @@ class ForgotPasswordAPIView(APIView):
                         "message": "If the email exists, a reset link has been sent.",
                         "data": None,
                     },
-                    status=status.HTTP_200_OK,
+                    status=status.HTTP_202_ACCEPTED,
                 )
             else:
                 # Stale mapping - cleanup
@@ -402,7 +402,7 @@ class ForgotPasswordAPIView(APIView):
                 "message": "If the email exists, a reset link has been sent.",
                 "data": None,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_202_ACCEPTED,
         )
     
 

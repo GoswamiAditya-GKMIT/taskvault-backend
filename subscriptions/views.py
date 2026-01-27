@@ -140,7 +140,7 @@ class RazorpayWebhookView(View):
             else:
                 print(f"DEBUG: [WEBHOOK] Skipping Task Trigger - Event {event_id} already exists")
             
-            return HttpResponse(status=200)
+            return HttpResponse(status=202)
         except Exception as e:
             print(f"DEBUG: [WEBHOOK] Exception during processing: {str(e)}")
             traceback.print_exc()
