@@ -192,7 +192,12 @@ class LoginSerializer(serializers.Serializer):
             raise AuthenticationFailed("Invalid username or password")
 
         if user.deleted_at:
-            raise PermissionDenied("User account is deleted.")
+            if user.deleted_by == 'self':
+                 raise PermissionDenied("Account scheduled for deletion. Contact Admin to restore.")
+            elif user.deleted_by == 'admin':
+                 raise PermissionDenied("Account blocked by Admin. Contact Support.")
+            else:
+                 raise PermissionDenied("User account is deleted.")
 
         if not user.is_email_verified:
             raise PermissionDenied("Email verification pending.")
