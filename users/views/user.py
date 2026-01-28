@@ -197,7 +197,16 @@ class UserDetailUpdateDeleteAPIView(APIView):
                         },
                         status=status.HTTP_400_BAD_REQUEST
                     )
+        # super admin can not delete himself
+        if actor.role == UserRoleChoices.SUPER_ADMIN:
+            if user.role == UserRoleChoices.SUPER_ADMIN:
+                return Response({"status": "failed", "message": "Super Admin cannot delete himself."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # tenant admin can not delete him/her self
+        if actor.role == UserRoleChoices.TENANT_ADMIN:
+            if user.role == UserRoleChoices.TENANT_ADMIN:
+                return Response({"status": "failed", "message": "Tenant Admin cannot delete himself."}, status=status.HTTP_400_BAD_REQUEST)
+    
         # 3. Atomic Soft Deletion
         soft_delete_user(user, actor)
 
