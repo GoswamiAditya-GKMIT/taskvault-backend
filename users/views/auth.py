@@ -208,9 +208,9 @@ class ResendLoginOTPAPIView(APIView):
         if cache.get(cooldown_key):
              return Response(
                 {
-                    "status": "failed",
+                    "status": "error",
                     "message": "Please wait before requesting another OTP.",
-                    "error": None,
+                    "error": "Rate limit exceeded.",
                 },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
@@ -255,9 +255,9 @@ class ResendVerificationLinkAPIView(APIView):
         if cache.get(cooldown_key):
              return Response(
                 {
-                    "status": "failed",
-                    "message": "Please wait before requesting another link.",
-                    "error": None,
+                    "status": "error",
+                    "message": "Please wait 1 minute before requesting another reset link.",
+                    "error": "Rate limit exceeded.",
                 },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
@@ -308,9 +308,9 @@ class InviteRegisterAPIView(APIView):
         if not invite_data:
             return Response(
                 {
-                    "status": "failed",
+                    "status": "error",
                     "message": "Invite link is invalid or expired.",
-                    "data": None,
+                    "error": "Invalid token.",
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -328,13 +328,13 @@ class InviteRegisterAPIView(APIView):
         if existing_user:
              # Safety Check: Should correspond to what InviteUserSerializer allowed
              if existing_user.is_email_verified:
-                 return Response({"status": "failed", "message": "User with this email is already verified."}, status=status.HTTP_400_BAD_REQUEST)
+                 return Response({"status": "error", "message": "User with this email is already verified.", "error": "Conflict"}, status=status.HTTP_400_BAD_REQUEST)
              
              # Block Pending (Active Token)
              token_key = f"user_verification_active_token:{existing_user.id}"
              
              if cache.get(token_key):
-                 return Response({"status": "failed", "message": "User verification is already pending for this email."}, status=status.HTTP_400_BAD_REQUEST)
+                 return Response({"status": "error", "message": "User verification is already pending for this email.", "error": "Conflict"}, status=status.HTTP_400_BAD_REQUEST)
              
              # If stale , overwrite
              user = existing_user

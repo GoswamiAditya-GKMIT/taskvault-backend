@@ -179,12 +179,12 @@ class UserDetailUpdateDeleteAPIView(APIView):
         if actor.id != user.id:
             if actor.role == UserRoleChoices.SUPER_ADMIN:
                 if user.role != UserRoleChoices.TENANT_ADMIN:
-                     return Response({"status": "failed", "message": "Super Admin can only delete Tenant Admins."}, status=status.HTTP_403_FORBIDDEN)
+                     return Response({"status": "error", "message": "Super Admin can only delete Tenant Admins.", "error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
             elif actor.role == UserRoleChoices.TENANT_ADMIN:
                 if user.role != UserRoleChoices.USER:
-                     return Response({"status": "failed", "message": "Tenant Admin can only delete Users."}, status=status.HTTP_403_FORBIDDEN)
+                     return Response({"status": "error", "message": "Tenant Admin can only delete Users.", "error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
                 if user.organization != actor.organization:
-                     return Response({"status": "failed", "message": "Cross-tenant deletion not allowed."}, status=status.HTTP_403_FORBIDDEN)
+                     return Response({"status": "error", "message": "Cross-tenant deletion not allowed.", "error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
 
         # 2. Block Super Admin from deleting Tenant Admin of Deactivated Org
         if actor.role == UserRoleChoices.SUPER_ADMIN:
@@ -192,12 +192,22 @@ class UserDetailUpdateDeleteAPIView(APIView):
                 if user.organization and not user.organization.is_active:
                      return Response(
                         {
-                            "status": "failed", 
-                            "message": "Cannot delete Tenant Admin of a deactivated organization."
+                            "status": "error", 
+                            "message": "Cannot delete Tenant Admin of a deactivated organization.",
+                            "error": "Organization Deactivated"
                         },
-                        status=status.HTTP_400_BAD_REQUEST
+                        status=status.HTTP_403_FORBIDDEN
                     )
+        # super admin can not delete himself
+        if actor.role == UserRoleChoices.SUPER_ADMIN:
+            if user.role == UserRoleChoices.SUPER_ADMIN:
+                return Response({"status": "error", "message": "Super Admin cannot delete himself.", "error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
 
+        # tenant admin can not delete him/her self
+        if actor.role == UserRoleChoices.TENANT_ADMIN:
+            if user.role == UserRoleChoices.TENANT_ADMIN:
+                return Response({"status": "error", "message": "Tenant Admin cannot delete himself.", "error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
+    
         # 3. Atomic Soft Deletion
         soft_delete_user(user, actor)
 
@@ -214,21 +224,21 @@ class UserRestoreAPIView(APIView):
         try:
            user = User.objects.get(id=id)
         except User.DoesNotExist:
-           return Response({"status": "failed", "message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+           return Response({"status": "error", "message": "User not found", "error": "Not Found"}, status=status.HTTP_404_NOT_FOUND)
 
         actor = request.user
 
         if actor.role == UserRoleChoices.TENANT_ADMIN:
             if user.role != UserRoleChoices.USER:
-                 return Response({"status": "failed", "message": "Tenant Admin can only restore Users"}, status=status.HTTP_400_BAD_REQUEST)
+                 return Response({"status": "error", "message": "Tenant Admin can only restore Users", "error": "Permission Denied"}, status=status.HTTP_400_BAD_REQUEST)
             if not user.organization or user.organization != actor.organization:
-                 return Response({"status": "failed", "message": "User not found within your organization"}, status=status.HTTP_404_NOT_FOUND)
+                 return Response({"status": "error", "message": "User not found within your organization", "error": "Permission Denied"}, status=status.HTTP_404_NOT_FOUND)
         if not user.deleted_at:
-             return Response({"status": "failed", "message": "User is not deleted"}, status=status.HTTP_400_BAD_REQUEST)
+             return Response({"status": "error", "message": "User is not deleted", "error": "Bad Request"}, status=status.HTTP_400_BAD_REQUEST)
 
         if actor.role == UserRoleChoices.SUPER_ADMIN:
             if user.role != UserRoleChoices.TENANT_ADMIN:
-                 return Response({"status": "failed", "message": "Super Admin can only restore Tenant Admins"}, status=status.HTTP_400_BAD_REQUEST)
+                 return Response({"status": "error", "message": "Super Admin can only restore Tenant Admins", "error": "Permission Denied"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Atomic Restoration
         restore_user(user)
@@ -345,9 +355,9 @@ class ForgotPasswordAPIView(APIView):
         if cache.get(cooldown_key):
              return Response(
                 {
-                    "status": "failed",
+                    "status": "error",
                     "message": "Please wait 1 minute before requesting another reset link.",
-                    "error": None,
+                    "error": "Rate limit exceeded.",
                 },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
