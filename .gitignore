@@ -27,3 +27,4 @@ celerybeat-schedule*
 .vscode/
 logs/
 celerybeat-schedule*
+/scripts
