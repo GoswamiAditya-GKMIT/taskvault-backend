@@ -7,11 +7,14 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, NotFound
 from django.utils import timezone
 from django.db.models import Count, Q
+from django.core.cache import cache
+from core.cache import generate_cache_key
 
 from core.choices import UserRoleChoices
 from core.pagination import DefaultPagination
 from core.permissions import CanViewTask, CanUpdateTask, CanDeleteTask, CanCreateTask
 from tasks.services import update_task
+from core.constants import TASK_CACHE_TIMEOUT
 from tasks.models import Task
 from tasks.serializers.task import (
     TaskCreateSerializer,
@@ -50,6 +53,15 @@ class TaskListCreateAPIView(APIView):
         user = request.user
         organization = user.organization
         
+        # Try to get data from cache
+
+
+        cache_key = generate_cache_key(user, self, request)
+        if cache_key:
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                return Response(cached_data, status=status.HTTP_200_OK)
+
         # Base QuerySet: All active tasks in the User's Organization
         # (Implicit Multi-Tenancy Filter)
         queryset = Task.objects.filter(
@@ -108,6 +120,11 @@ class TaskListCreateAPIView(APIView):
 
                                                                                                             
         response_data.update(paginator.get_root_pagination_data())
+
+        # Set cache
+        if cache_key:
+            # Cache for 1 hour by default, invalidation handles updates
+            cache.set(cache_key, response_data, timeout=TASK_CACHE_TIMEOUT)
 
         return Response(response_data, status=status.HTTP_200_OK)
     
