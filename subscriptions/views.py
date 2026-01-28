@@ -24,7 +24,6 @@ from core.authentication import CustomJWTAuthentication, SubscriptionTokenAuthen
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.apps import apps
 
-# --- API VIEWS ---
 
 class CreateOrderAPIView(APIView):
     """
@@ -41,7 +40,7 @@ class CreateOrderAPIView(APIView):
                 "message": "Payment order created successfully",
                 "data": {
                     "order_id": subscription.razorpay_order_id,
-                    "amount": settings.PREMIUM_PLAN_AMOUNT, # use integer paise directly
+                    "amount": settings.PREMIUM_PLAN_AMOUNT,
                     "currency": subscription.currency,
                     "razorpay_key_id": settings.RAZORPAY_KEY_ID,
                     "organization_name": request.user.organization.name
@@ -54,7 +53,7 @@ class CreateOrderAPIView(APIView):
                 "error": "Bad Request"
             }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            traceback.print_exc()  # Print the full error to the terminal
+            traceback.print_exc() 
             return Response({
                 "status": "error",
                 "message": f"Failed to create payment order: {str(e)}",
@@ -88,28 +87,22 @@ class SubscriptionStatusAPIView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
 
 
-# --- ADMIN AUDIT VIEWSETS ---
+ # ADMIN AUDIT VIEWSETS 
 
 class SubscriptionAdminViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    SuperAdmin view for all subscriptions.
-    """
+
     queryset = Subscription.objects.all().order_by('-created_at')
     serializer_class = SubscriptionSerializer
     permission_classes = [IsAuthenticated, IsSuperAdmin]
 
 class PaymentAdminViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    SuperAdmin view for all payments.
-    """
+
     queryset = Payment.objects.all().order_by('-created_at')
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated, IsSuperAdmin]
 
 class WebhookEventAdminViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    SuperAdmin view for all webhooks.
-    """
+
     queryset = WebhookEvent.objects.all().order_by('-created_at')
     serializer_class = WebhookEventSerializer
     permission_classes = [IsAuthenticated, IsSuperAdmin]
@@ -117,9 +110,7 @@ class WebhookEventAdminViewSet(viewsets.ReadOnlyModelViewSet):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class RazorpayWebhookView(View):
-    """
-    Endpoint for receiving Razorpay webhooks.
-    """
+
     def post(self, request):
         print(f"\nDEBUG: [WEBHOOK] --- New Request Received at {timezone.now()} ---")
         print(f"DEBUG: [WEBHOOK] Headers: {dict(request.headers)}")
@@ -150,7 +141,7 @@ class RazorpayWebhookView(View):
             return HttpResponse(status=200)
 
 
-# --- TEMPLATE VIEWS ---
+# TEMPLATE VIEWS
 
 @method_decorator(xframe_options_exempt, name='dispatch')
 class UpgradePageView(APIView):
@@ -192,7 +183,36 @@ class PaymentCallbackView(APIView):
     def post(self, request):
         token = request.GET.get('token') or request.POST.get('token')
 
-        # 2. Extract Data
+        # Checking for Error Payload
+        error_code = request.POST.get('error[code]')
+        if error_code:
+            error_desc = request.POST.get('error[description]', 'Payment Failed')
+            error_metadata = request.POST.get('error[metadata]')
+            print(f"DEBUG: [CALLBACK] Received Payment Failure: {error_code} - {error_desc}")
+            
+            try:
+                import json
+                metadata = json.loads(error_metadata) if error_metadata else {}
+                razorpay_order_id = metadata.get('order_id')
+                razorpay_payment_id = metadata.get('payment_id')
+                
+                if razorpay_order_id:
+                     from .services import handle_payment_failure
+                     handle_payment_failure(razorpay_order_id, razorpay_payment_id, error_desc)
+                else:
+                     fallback_order_id = request.GET.get('order_id')
+                     if fallback_order_id:
+                         from .services import handle_payment_failure
+                         handle_payment_failure(fallback_order_id, None, error_desc)
+            except Exception as e:
+                print(f"DEBUG: [CALLBACK] Error parsing metadata: {e}")
+
+            fail_url = reverse('payment-failure') + f"?error={error_desc}"
+            if token:
+                fail_url += f"&token={token}"
+            return redirect(fail_url)
+
+        # 2. Extract Data (Success Case)
         razorpay_order_id = request.POST.get('razorpay_order_id')
         razorpay_payment_id = request.POST.get('razorpay_payment_id', 'unknown')
         razorpay_signature = request.POST.get('razorpay_signature')
