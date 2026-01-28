@@ -51,11 +51,15 @@
                     "name": "TaskVault",
                     "description": "Premium Upgrade",
                     "order_id": data.data.order_id,
-                    "callback_url": window.location.origin + "/subscriptions/callback/?token=" + encodeURIComponent(token),
+                    "callback_url": window.location.origin + "/subscriptions/callback/?token=" + encodeURIComponent(token) + "&order_id=" + data.data.order_id,
                     "redirect": true,
                     "prefill": { "name": "User", "email": "user@example.com" },
-                    "theme": { "color": "#3399cc" }
+                    "theme": { "color": "#3399cc" },
+                    "retry": {
+                        "enabled": false
+                    }
                 };
+
                 new Razorpay(options).open();
 
             } catch (e) {

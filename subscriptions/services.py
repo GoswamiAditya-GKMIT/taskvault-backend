@@ -182,3 +182,57 @@ def reconcile_pending_orders():
         except Exception as e:
             # Continue to next if one fails
             print(f"Error reconciling order {sub.razorpay_order_id}: {str(e)}")
+            
+#     Handles payment failure callbacks.Marks Subscription and Payment as FAILED.
+
+@transaction.atomic
+def handle_payment_failure(razorpay_order_id: str, razorpay_payment_id: str = None, error_description: str = "Payment Failed"):
+    try:
+        subscription = Subscription.objects.select_for_update().get(razorpay_order_id=razorpay_order_id)
+        
+        # If payment_id is missing, try to fetch it from Razorpay
+        if not razorpay_payment_id:
+             try:
+                 payments = client.order.payments(razorpay_order_id)
+                 if payments and payments.get('items'):
+                     # Get the most recent payment attempt
+                     latest_payment = payments['items'][0] # Items are usually returned sorted desc by created_at, but verify logic if needed
+                     razorpay_payment_id = latest_payment.get('id')
+                     print(f"DEBUG: Fetched missing Payment ID {razorpay_payment_id} from Razorpay API")
+             except Exception as e:
+                 print(f"DEBUG: Failed to fetch payments from Razorpay: {e}")
+
+        # Update Subscription
+        if subscription.status != SubscriptionStatus.ACTIVE:
+            subscription.status = SubscriptionStatus.FAILED
+            subscription.razorpay_payment_id = razorpay_payment_id
+            subscription.save()
+
+        # Create or Update Payment Record
+        # Search for existing payment record
+        payment = Payment.objects.filter(
+            subscription=subscription,
+            razorpay_order_id=razorpay_order_id
+        ).first()
+
+        if payment:
+            payment.status = PaymentStatus.FAILED
+            payment.razorpay_payment_id = razorpay_payment_id
+            payment.error_message = error_description
+            payment.save()
+        else:
+             # Create a new failed payment record
+            Payment.objects.create(
+                subscription=subscription,
+                razorpay_order_id=razorpay_order_id,
+                razorpay_payment_id=razorpay_payment_id,
+                amount=subscription.amount,
+                currency=subscription.currency,
+                status=PaymentStatus.FAILED,
+                error_message=error_description
+            )
+
+    except Subscription.DoesNotExist:
+        print(f"DEBUG: Subscription not found for order {razorpay_order_id}")
+    except Exception as e:
+        print(f"DEBUG: Error handling payment failure: {str(e)}")
