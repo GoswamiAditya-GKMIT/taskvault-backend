@@ -369,8 +369,8 @@ class CanDeleteUser(BasePermission):
         actor = request.user
         target_user = obj
 
-        # 1. Self Deletion
-        if actor == target_user:
+        # 1. Self Deletion (User can delete themselves) but not SUPER_ADMIN and TENANT_ADMIN
+        if actor == target_user and actor.role != UserRoleChoices.SUPER_ADMIN and actor.role != UserRoleChoices.TENANT_ADMIN:
             return True
 
         # 2. Super Admin Logic
@@ -378,11 +378,10 @@ class CanDeleteUser(BasePermission):
             # Can only delete Tenant Admin
             if target_user.role != UserRoleChoices.TENANT_ADMIN:
                 return False
-            
             # Block if Target Org is Deactivated
             if target_user.organization and not target_user.organization.is_active:
                 return False
-                
+
             return True
 
         # 3. Tenant Admin Logic
