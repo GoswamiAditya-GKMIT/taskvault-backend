@@ -7,7 +7,7 @@ from subscriptions.views import (
 
 # Admin Router
 admin_router = DefaultRouter()
-admin_router.register(r'subscriptions', SubscriptionAdminViewSet, basename='admin-subscriptions')
+admin_router.register(r'', SubscriptionAdminViewSet, basename='admin-subscriptions')
 admin_router.register(r'payments', PaymentAdminViewSet, basename='admin-payments')
 admin_router.register(r'webhooks', WebhookEventAdminViewSet, basename='admin-webhooks')
 
