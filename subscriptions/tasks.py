@@ -1,22 +1,24 @@
+import logging
 import json
 from celery import shared_task
 from django.utils import timezone
 from .models import WebhookEvent, Subscription, SubscriptionStatus
 from .services import activate_subscription_atomic, reconcile_pending_orders
 
-@shared_task
-def process_webhook_async(event_id):
-    """
-    Async task to process a stored webhook event.
-    """
+logger = logging.getLogger(__name__)
+
+@shared_task(bind=True, autoretry_for=(Exception,), retry_backoff=True, max_retries=5)
+def process_webhook_async(self, event_id):
+
     try:
         event = WebhookEvent.objects.get(event_id=event_id)
         if event.is_processed:
+            logger.info(f"Task Skipped: Event {event_id} already processed")
             return "Already processed"
 
         payload = event.payload
         event_type = event.event_type
-
+        
         # 1. Handle Payment Captured
         if event_type == "payment.captured":
             razorpay_order_id = payload['payload']['payment']['entity']['order_id']
@@ -55,7 +57,6 @@ def process_webhook_async(event_id):
                  org = subscription.organization
                  org.is_premium = False
                  org.save(update_fields=['is_premium'])
-                 print(f"DEBUG: [WEBHOOK] Reverted Premium for Org {org.id} due to payment failure.")
              except Subscription.DoesNotExist:
                  pass
 
@@ -63,13 +64,16 @@ def process_webhook_async(event_id):
         event.is_processed = True
         event.processed_at = timezone.now()
         event.save()
+        logger.info(f"Task Completed: Processed {event_type} for Event ID {event_id}")
         return f"Processed {event_type}"
 
     except Exception as e:
+        logger.error(f"Task Failed: process_webhook_async failed for {event_id}: {str(e)}", exc_info=True)
         if 'event' in locals():
             event.processing_error = str(e)
             event.save()
         raise e
+
 
 @shared_task(name="subscriptions.tasks.reconcile_pending_subscriptions_job")
 def reconcile_pending_subscriptions_job():
