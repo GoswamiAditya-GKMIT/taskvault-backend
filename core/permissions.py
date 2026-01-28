@@ -1,8 +1,6 @@
 from rest_framework.permissions import BasePermission
 from core.choices import UserRoleChoices
 
-
-
 class IsSuperAdmin(BasePermission):
     """
     Allows access only to SUPER_ADMIN users.
@@ -311,4 +309,92 @@ class CanAccessUser(BasePermission):
 
             return True 
             
+        return False
+
+
+class CanRestoreUser(BasePermission):
+    """
+    Controls user restoration logic.
+    SUPER_ADMIN:
+        - can only restore TENANT_ADMIN
+    TENANT_ADMIN:
+        - can only restore USER within their own organization
+    """
+    
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+             return False
+        
+        # Block if Org is inactive (Standard Tenant check)
+        if user.role == UserRoleChoices.TENANT_ADMIN:
+             if user.organization and not user.organization.is_active:
+                 return False
+
+        return True
+
+    def has_object_permission(self, request, view, obj):
+        actor = request.user
+        target_user = obj
+        
+        # 1. Tenant Admin -> Can only restore Users in same Org
+        if actor.role == UserRoleChoices.TENANT_ADMIN:
+            if target_user.role != UserRoleChoices.USER:
+                return False
+            if target_user.organization != actor.organization:
+                return False
+            return True
+            
+        # 2. Super Admin -> Can only restore Tenant Admins
+        if actor.role == UserRoleChoices.SUPER_ADMIN:
+            return target_user.role == UserRoleChoices.TENANT_ADMIN
+            
+        return False
+
+        
+class CanDeleteUser(BasePermission):
+    """
+    Controls user deletion logic.
+    RULES:
+    1. Users can delete themselves.
+    2. SUPER_ADMIN can only delete TENANT_ADMIN (if Org is Active).
+    3. TENANT_ADMIN can only delete USER (Same Org).
+    """
+
+    def has_object_permission(self, request, view, obj):
+        # Allow non-DELETE methods to pass through (handled by other classes)
+        if request.method != 'DELETE':
+            return True
+
+        actor = request.user
+        target_user = obj
+
+        # 1. Self Deletion
+        if actor == target_user:
+            return True
+
+        # 2. Super Admin Logic
+        if actor.role == UserRoleChoices.SUPER_ADMIN:
+            # Can only delete Tenant Admin
+            if target_user.role != UserRoleChoices.TENANT_ADMIN:
+                return False
+            
+            # Block if Target Org is Deactivated
+            if target_user.organization and not target_user.organization.is_active:
+                return False
+                
+            return True
+
+        # 3. Tenant Admin Logic
+        if actor.role == UserRoleChoices.TENANT_ADMIN:
+            # Can only delete User
+            if target_user.role != UserRoleChoices.USER:
+                return False
+            
+            # Must be same Org
+            if target_user.organization != actor.organization:
+                return False
+                
+            return True
+
         return False

@@ -19,7 +19,7 @@ from users.serializers import (
     InviteUserSerializer,
     ForgotPasswordSerializer
 )
-from core.permissions import IsTenantAdminOrSuperAdmin , IsTenantAdmin, CanAccessUser
+from core.permissions import IsTenantAdminOrSuperAdmin , IsTenantAdmin, CanAccessUser, CanRestoreUser, CanDeleteUser
 from core.pagination import DefaultPagination
 from users.services import soft_delete_user, restore_user
 from users.tasks import send_user_invite_email , send_password_reset_email, send_verification_link_email
@@ -126,13 +126,11 @@ class UserListCreateAPIView(APIView):
         )
     
 class UserDetailUpdateDeleteAPIView(APIView):
-    permission_classes = [IsAuthenticated, CanAccessUser]
+    permission_classes = [IsAuthenticated, CanAccessUser, CanDeleteUser]
 
     def get_object(self, request, id):
-        # We fetch the user first, then check permissions on the object
         user = get_object_or_404(User, id=id)
         
-        # This triggers has_object_permission in CanAccessUser
         self.check_object_permissions(request, user)
         
         return user
@@ -176,38 +174,7 @@ class UserDetailUpdateDeleteAPIView(APIView):
         user = self.get_object(request, id)
         actor = request.user
 
-        if actor.id != user.id:
-            if actor.role == UserRoleChoices.SUPER_ADMIN:
-                if user.role != UserRoleChoices.TENANT_ADMIN:
-                     return Response({"status": "error", "message": "Super Admin can only delete Tenant Admins.", "error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
-            elif actor.role == UserRoleChoices.TENANT_ADMIN:
-                if user.role != UserRoleChoices.USER:
-                     return Response({"status": "error", "message": "Tenant Admin can only delete Users.", "error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
-                if user.organization != actor.organization:
-                     return Response({"status": "error", "message": "Cross-tenant deletion not allowed.", "error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
 
-        # 2. Block Super Admin from deleting Tenant Admin of Deactivated Org
-        if actor.role == UserRoleChoices.SUPER_ADMIN:
-            if user.role == UserRoleChoices.TENANT_ADMIN:
-                if user.organization and not user.organization.is_active:
-                     return Response(
-                        {
-                            "status": "error", 
-                            "message": "Cannot delete Tenant Admin of a deactivated organization.",
-                            "error": "Organization Deactivated"
-                        },
-                        status=status.HTTP_403_FORBIDDEN
-                    )
-        # super admin can not delete himself
-        if actor.role == UserRoleChoices.SUPER_ADMIN:
-            if user.role == UserRoleChoices.SUPER_ADMIN:
-                return Response({"status": "error", "message": "Super Admin cannot delete himself.", "error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
-
-        # tenant admin can not delete him/her self
-        if actor.role == UserRoleChoices.TENANT_ADMIN:
-            if user.role == UserRoleChoices.TENANT_ADMIN:
-                return Response({"status": "error", "message": "Tenant Admin cannot delete himself.", "error": "Permission Denied"}, status=status.HTTP_403_FORBIDDEN)
-    
         # 3. Atomic Soft Deletion
         soft_delete_user(user, actor)
 
@@ -218,27 +185,16 @@ class UserDetailUpdateDeleteAPIView(APIView):
 
 
 class UserRestoreAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsTenantAdminOrSuperAdmin]
+    permission_classes = [IsAuthenticated, CanRestoreUser]
 
     def post(self, request, id):
-        try:
-           user = User.objects.get(id=id)
-        except User.DoesNotExist:
-           return Response({"status": "error", "message": "User not found", "error": "Not Found"}, status=status.HTTP_404_NOT_FOUND)
+        user = get_object_or_404(User, id=id)
+        
+        # Trigger object-level permission check (CanRestoreUser)
+        self.check_object_permissions(request, user)
 
-        actor = request.user
-
-        if actor.role == UserRoleChoices.TENANT_ADMIN:
-            if user.role != UserRoleChoices.USER:
-                 return Response({"status": "error", "message": "Tenant Admin can only restore Users", "error": "Permission Denied"}, status=status.HTTP_400_BAD_REQUEST)
-            if not user.organization or user.organization != actor.organization:
-                 return Response({"status": "error", "message": "User not found within your organization", "error": "Permission Denied"}, status=status.HTTP_404_NOT_FOUND)
         if not user.deleted_at:
              return Response({"status": "error", "message": "User is not deleted", "error": "Bad Request"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if actor.role == UserRoleChoices.SUPER_ADMIN:
-            if user.role != UserRoleChoices.TENANT_ADMIN:
-                 return Response({"status": "error", "message": "Super Admin can only restore Tenant Admins", "error": "Permission Denied"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Atomic Restoration
         restore_user(user)
