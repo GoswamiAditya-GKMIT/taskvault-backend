@@ -42,9 +42,7 @@ class Subscription(models.Model):
     
     class Meta:
         db_table = "subscriptions"
-        indexes = [
-            models.Index(fields=["status", "created_at"]),
-        ]
+        ordering = ["-created_at"]
     
     def __str__(self):
         return f"{self.organization.name} - {self.plan_type} ({self.status})"
@@ -91,9 +89,7 @@ class Payment(models.Model):
     
     class Meta:
         db_table = "payments"
-        indexes = [
-            models.Index(fields=["status", "created_at"]),
-        ]
+        ordering = ["-created_at"]  
     
     def __str__(self):
         return f"Payment {self.razorpay_order_id} - {self.status}"
@@ -130,10 +126,7 @@ class WebhookEvent(models.Model):
     
     class Meta:
         db_table = "webhook_events"
-        indexes = [
-            models.Index(fields=["is_processed", "created_at"]),
-            models.Index(fields=["event_type", "created_at"]),
-        ]
+        ordering = ["-created_at"]
     
     def __str__(self):
         return f"{self.event_type} - {self.event_id}"
