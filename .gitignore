@@ -25,6 +25,5 @@ env/
 .pytest_cache/
 celerybeat-schedule*
 .vscode/
-scripts/
 logs/
 celerybeat-schedule*
