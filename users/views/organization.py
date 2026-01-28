@@ -73,7 +73,7 @@ class OrganizationDetailAPIView(APIView):
         organization = self.get_object(id)
         if not organization:
             return Response(
-                {"status": "failed", "message": "Organization not found."},
+                {"status": "error", "message": "Organization not found.", "error": "Not Found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -91,7 +91,7 @@ class OrganizationDetailAPIView(APIView):
         organization = self.get_object(id)
         if not organization:
             return Response(
-                {"status": "failed", "message": "Organization not found."},
+                {"status": "error", "message": "Organization not found.", "error": "Not Found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -118,7 +118,7 @@ class OrganizationDetailAPIView(APIView):
         organization = self.get_object(id)
         if not organization:
             return Response(
-                {"status": "failed", "message": "Organization not found."},
+                {"status": "error", "message": "Organization not found.", "error": "Not Found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 

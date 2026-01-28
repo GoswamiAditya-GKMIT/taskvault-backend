@@ -49,14 +49,16 @@ class CreateOrderAPIView(APIView):
             }, status=status.HTTP_201_CREATED)
         except ValueError as e:
             return Response({
-                "status": "failed",
-                "message": str(e)
+                "status": "error",
+                "message": str(e),
+                "error": "Bad Request"
             }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             traceback.print_exc()  # Print the full error to the terminal
             return Response({
                 "status": "error",
-                "message": f"Failed to create payment order: {str(e)}"
+                "message": f"Failed to create payment order: {str(e)}",
+                "error": "Internal Server Error"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class SubscriptionStatusAPIView(APIView):
@@ -81,7 +83,8 @@ class SubscriptionStatusAPIView(APIView):
         except Subscription.DoesNotExist:
             return Response({
                 "status": "error",
-                "message": "Subscription not found"
+                "message": "Subscription not found",
+                "error": "Not Found"
             }, status=status.HTTP_404_NOT_FOUND)
 
 

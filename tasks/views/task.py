@@ -155,7 +155,7 @@ class TaskDetailUpdateDeleteAPIView(APIView):
         # Block updates on deleted tasks
         if task.deleted_at:
              return Response(
-                {"status": "failed", "message": "Cannot update a deleted task."},
+                {"status": "error", "message": "Cannot update a deleted task.", "error": "Not Found"},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
@@ -191,6 +191,7 @@ class TaskDetailUpdateDeleteAPIView(APIView):
                 {
                     "status": "error",
                     "message": "Cannot delete task because it has active subtasks.",
+                    "error": "Conflict",
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
