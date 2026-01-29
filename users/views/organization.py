@@ -18,11 +18,26 @@ class OrganizationCreateAPIView(APIView):
         queryset = (
             Organization.objects
             .filter(deleted_at__isnull=True)
+        )
+
+        # Filtering
+        is_premium = request.query_params.get("is_premium")
+        if is_premium:
+            is_premium_bool = is_premium.lower() == "true"
+            queryset = queryset.filter(is_premium=is_premium_bool)
+
+        is_active = request.query_params.get("is_active")
+        if is_active:
+             is_active_bool = is_active.lower() == "true"
+             queryset = queryset.filter(is_active=is_active_bool)
+
+        queryset = (
+            queryset
             .annotate(
                 total_active_task_count=Count('tasks', filter=Q(tasks__deleted_at__isnull=True), distinct=True),
                 total_active_user_count=Count('users', filter=Q(users__deleted_at__isnull=True), distinct=True),
             )
-            .order_by("name")
+            .order_by("-created_at")
         )
 
         paginator = DefaultPagination()

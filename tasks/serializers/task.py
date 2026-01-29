@@ -21,9 +21,9 @@ class TaskListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "title", "status", "priority", "deadline", 
             "owner", "assignee", "organization", "parent_task",
-            "created_at", "subtasks_count"
+            "created_at", "deleted_at" , "subtasks_count"
         ]
-        read_only_fields = ["id", "organization", "created_at"]
+        read_only_fields = ["id", "organization", "created_at", "deleted_at"]
 
 
 class TaskDetailSerializer(serializers.ModelSerializer):
@@ -36,9 +36,9 @@ class TaskDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id", "title", "description", "status", "priority", "deadline",
             "owner", "assignee", "organization", "parent_task",
-            "created_at", "updated_at", "subtasks"
+            "created_at", "updated_at", "deleted_at" ,"subtasks"
         ]
-        read_only_fields = ["id", "organization", "created_at", "updated_at"]
+        read_only_fields = ["id", "organization", "created_at", "updated_at", "deleted_at"]
 
     def get_subtasks(self, obj):
         # Return direct subtasks using ListSerializer
