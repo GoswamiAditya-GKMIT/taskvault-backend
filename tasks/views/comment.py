@@ -20,18 +20,25 @@ from core.choices import UserRoleChoices
 
 
 class TaskCommentListCreateAPIView(APIView):
-    permission_classes = [IsAuthenticated, CanViewOrCreateComment]
+    permission_classes = [
+        IsAuthenticated,
+        CanViewOrCreateComment,
+    ]
 
     def get(self, request, task_id):
-        task = get_object_or_404(Task, id=task_id, deleted_at__isnull=True)
+        task = get_object_or_404(
+            Task,
+            id=task_id,
+            organization=request.user.organization,
+            deleted_at__isnull=True
+        )
 
-        #  object-level permission
         self.check_object_permissions(request, task)
 
         queryset = Comment.objects.filter(
             task=task,
             deleted_at__isnull=True
-        )
+        ).order_by("-created_at")
 
         paginator = DefaultPagination()
         page = paginator.paginate_queryset(queryset, request)
@@ -56,7 +63,12 @@ class TaskCommentListCreateAPIView(APIView):
         )
 
     def post(self, request, task_id):
-        task = get_object_or_404(Task, id=task_id, deleted_at__isnull=True)
+        task = get_object_or_404(
+            Task, 
+            id=task_id, 
+            organization=request.user.organization,
+            deleted_at__isnull=True
+        )
 
         #  object-level permission
         self.check_object_permissions(request, task)
@@ -80,10 +92,20 @@ class TaskCommentListCreateAPIView(APIView):
 
 
 class TaskCommentDetailUpdateDeleteAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [
+        IsAuthenticated,
+        CanViewOrCreateComment,
+        CanUpdateComment,
+        CanDeleteComment,
+    ]
 
     def get_object(self, request, task_id, comment_id):
-        task = get_object_or_404(Task, id=task_id, deleted_at__isnull=True)
+        task = get_object_or_404(
+            Task,
+            id=task_id,
+            organization=request.user.organization,
+            deleted_at__isnull=True
+        )
         comment = get_object_or_404(
             Comment,
             id=comment_id,
@@ -94,8 +116,6 @@ class TaskCommentDetailUpdateDeleteAPIView(APIView):
 
     def get(self, request, task_id, comment_id):
         comment = self.get_object(request, task_id, comment_id)
-
-        self.permission_classes = [IsAuthenticated, CanViewOrCreateComment]
         self.check_object_permissions(request, comment.task)
 
         return Response(
@@ -108,8 +128,6 @@ class TaskCommentDetailUpdateDeleteAPIView(APIView):
 
     def patch(self, request, task_id, comment_id):
         comment = self.get_object(request, task_id, comment_id)
-
-        self.permission_classes = [IsAuthenticated, CanUpdateComment]
         self.check_object_permissions(request, comment)
 
         serializer = CommentCreateUpdateSerializer(
@@ -133,8 +151,6 @@ class TaskCommentDetailUpdateDeleteAPIView(APIView):
 
     def delete(self, request, task_id, comment_id):
         comment = self.get_object(request, task_id, comment_id)
-
-        self.permission_classes = [IsAuthenticated, CanDeleteComment]
         self.check_object_permissions(request, comment)
 
         comment.deleted_at = timezone.now()
@@ -142,11 +158,8 @@ class TaskCommentDetailUpdateDeleteAPIView(APIView):
 
         return Response(
             {
-                "status": "success",
-                "message": "Comment deleted successfully",
-                "data": None,
             },
-            status=status.HTTP_200_OK,
+            status=status.HTTP_204_NO_CONTENT,
         )
     
     

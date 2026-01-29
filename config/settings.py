@@ -14,6 +14,17 @@ from pathlib import Path
 from dotenv import load_dotenv
 from datetime import timedelta
 from rest_framework.permissions import IsAuthenticated
+from core.constants import (
+    PREMIUM_PLAN_AMOUNT_IN_PAISA,
+    PREMIUM_PLAN_CURRENCY_CODE,
+    FREE_TIER_TASK,
+    RECONSILE_SUBSCRIPTIONS_JOB_TIME,
+    DELETE_UNVERIFIED_USERS_JOB_TIME,
+    DELETE_SOFT_DELETED_USERS_TIME,
+    DELETE_BLACKLISTED_TOKENS_JOB_TIME,
+    DELETE_OLD_LOGS_JOB_TIME,
+)
+
 
 
 load_dotenv()
@@ -47,6 +58,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'users',
     'tasks',
+    'subscriptions',
 ]
 
 MIDDLEWARE = [
@@ -57,6 +69,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.LoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -121,7 +134,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "core.authentication.CustomJWTAuthentication",
     ],
 
     "DEFAULT_PERMISSION_CLASSES": [
@@ -139,7 +152,60 @@ SIMPLE_JWT = {
 
 }
 
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.getenv("CACHES_LOCATIONS"),
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}
+
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+
+CELERY_BEAT_SCHEDULE = {
+    "reconcile_pending_subscriptions": {
+        "task": "subscriptions.tasks.reconcile_pending_subscriptions_job",
+        "schedule": RECONSILE_SUBSCRIPTIONS_JOB_TIME,  # Every 60 minutes
+    },
+    "hard_delete_unverified_users": {
+        "task": "users.tasks.hard_delete_unverified_users",
+        "schedule": DELETE_UNVERIFIED_USERS_JOB_TIME,  # Every 24 hours
+    },
+    "clear_blacklisted_tokens": {
+        "task": "users.tasks.clear_blacklisted_tokens",
+        "schedule": DELETE_BLACKLISTED_TOKENS_JOB_TIME,  # Every 24 hours
+    },
+    "delete_old_logs": {
+        "task": "core.tasks.delete_old_logs",
+        "schedule": DELETE_OLD_LOGS_JOB_TIME,  # Every 30 days
+    },
+    "hard_delete_soft_deleted_users": {
+        "task": "users.tasks.hard_delete_soft_deleted_users",
+        "schedule": DELETE_SOFT_DELETED_USERS_TIME,  # Every 24 hours
+    },
+}
+
 AUTH_USER_MODEL = "users.User"
+
+# EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+# EMAIL_HOST = "smtp.gmail.com"
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
+# EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp-relay.brevo.com"  # Brevo SMTP server
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER") 
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = "taskvault <no-reply@shopsurf.site>"
 
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
@@ -156,4 +222,69 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+FRONETEND_EMAIL_VERIFICATION_PATH="/verify-email"
+BASE_URL = os.getenv("BASE_URL")
+FRONETEND_PASSWORD_RESET_PATH="/auth/reset-password/"
+
+INIVTE_LINK=os.getenv("REGISTER_INVITE_LINK_PATH")
+
 STATIC_URL = 'static/'
+
+# Razorpay Settings
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
+RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+
+# Premium Plan Settings
+# 1000 INR = 100000 Paise
+PREMIUM_PLAN_AMOUNT = PREMIUM_PLAN_AMOUNT_IN_PAISA
+PREMIUM_PLAN_CURRENCY = PREMIUM_PLAN_CURRENCY_CODE
+
+# 100 tasks limit for free tier
+FREE_TIER_TASK_LIMIT = FREE_TIER_TASK
+
+# --- LOGGING CONFIGURATION ---
+
+LOG_DIR = os.path.join(BASE_DIR, 'logs')
+if not os.path.exists(LOG_DIR):
+    os.makedirs(LOG_DIR)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'json': {
+            '()': 'core.logging_formatter.JSONFormatter',
+        },
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {process:d} {thread:d} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(LOG_DIR, 'taskvault.log'),
+            'formatter': 'json',
+        },
+        'console': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'taskvault.request': {
+            'handlers': ['file', 'console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}

@@ -23,6 +23,10 @@ urlpatterns = [
     
     path('api/v1/', include('users.urls')),
     path('api/v1/', include('tasks.urls')),
+    
+    # Separating Subscription UI and REST API
+    path('subscriptions/', include('subscriptions.urls.ui')), # UI Templates
+    path('api/v1/subscriptions/', include('subscriptions.urls.api')), # REST Resources
 ]
 
 handler404 = "core.exceptions.custom_404_handler"

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Upgrade</title>
+</head>
+
+<body>
+    <h1>Upgrade to Premium</h1>
+    <p>Price: ₹{{ amount }}</p>
+    <button id="pay-btn" onclick="startPayment()">Pay Now</button>
+    <div id="loading" style="display:none;">Loading...</div>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+        async function startPayment() {
+            document.getElementById('pay-btn').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+
+            try {
+                // Get token from URL or Session
+                const urlParams = new URLSearchParams(window.location.search);
+                const token = urlParams.get('token') || sessionStorage.getItem('access_token');
+
+                if (!token) {
+                    alert('Authentication token missing. Please login.');
+                    return;
+                }
+
+                // Create Order
+                const response = await fetch('/api/v1/subscriptions/orders/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+
+                if (data.status !== 'success') {
+                    alert('Error creating order: ' + data.message);
+                    location.reload();
+                    return;
+                }
+
+                // Open Razorpay
+                const options = {
+                    "key": data.data.razorpay_key_id,
+                    "amount": data.data.amount,
+                    "currency": data.data.currency,
+                    "name": "TaskVault",
+                    "description": "Premium Upgrade",
+                    "order_id": data.data.order_id,
+                    "callback_url": window.location.origin + "/subscriptions/callback/?token=" + encodeURIComponent(token) + "&order_id=" + data.data.order_id,
+                    "redirect": true,
+                    "prefill": { "name": "User", "email": "user@example.com" },
+                    "theme": { "color": "#3399cc" },
+                    "retry": {
+                        "enabled": false
+                    }
+                };
+
+                new Razorpay(options).open();
+
+            } catch (e) {
+                console.error(e);
+                alert('Connection error');
+                document.getElementById('pay-btn').style.display = 'block';
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+    </script>
+</body>
+
+</html>

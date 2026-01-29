@@ -1,10 +1,183 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from core.choices import UserRoleChoices
+from django.contrib.auth.password_validation import validate_password
+from users.models import Organization
+from .organization import OrganizationSerializer
+from django.core.cache import cache
 
 User = get_user_model()
+
+class UserCreateSerializer(serializers.Serializer):    
+    email = serializers.EmailField()
+    username = serializers.CharField(min_length=6, max_length=150)
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
+    password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only = True)
+    organization_id = serializers.UUIDField(required=False)
+
+    def validate_password(self, value):
+        """
+        Use Django's default password validators
+        """
+        validate_password(value)
+        return value
+    
+    def validate_email(self, value):
+        value = value.lower()
+        if User.objects.filter(email=value, deleted_at__isnull=False).exists():
+            raise serializers.ValidationError(
+                "Account is deleted. Contact support."
+            )
+        return value
+    
+    def validate_first_name(self ,value):
+         if not value.isalpha():
+            raise serializers.ValidationError(
+                    "it should only contain alphabets"
+            )
+         return value
+    
+    def validate_username(self, value):
+        if value.isdigit():
+            raise serializers.ValidationError("Username cannot consist of only numbers.")
+
+        existing_user = User.objects.filter(username__iexact=value).first()
+        if existing_user and existing_user.deleted_at is not None:
+             raise serializers.ValidationError("Account is deleted. Contact support.")
+            
+        return value
+        
+    def validate_last_name(self , value):
+            if not value.isalpha():
+                raise serializers.ValidationError(
+                        "it should only contain alphabets"
+                )
+            return value
+    
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        creator = request.user
+
+        errors = {}
+
+        email = attrs.get("email", "").lower()
+        username = attrs.get("username")
+        password = attrs.get("password")
+        confirm_password = attrs.get("confirm_password")
+
+        if password != confirm_password:
+            errors["confirm_password"] = ["Passwords do not match."]
+
+        if creator.role == UserRoleChoices.USER:
+            errors["non_field_errors"] = ["You are not allowed to create users."]
+
+        if creator.role == UserRoleChoices.SUPER_ADMIN and not attrs.get("organization_id"):
+            errors["organization_id"] = ["This field is required."]
+
+        if creator.role == UserRoleChoices.TENANT_ADMIN and attrs.get("organization_id"):
+            errors["organization_id"] = ["Not allowed."]
+
+        existing_email_user = User.objects.filter(
+            email=email,
+            deleted_at__isnull=True
+        ).first()
+
+        stale_user = None
+
+        if existing_email_user:
+            if existing_email_user.is_email_verified:
+                errors["email"] = ["A user with this email already exists."]
+            else:
+                token_key = f"user_verification_active_token:{existing_email_user.id}"
+                if cache.get(token_key):
+                    errors["email"] = ["User verification is already pending for this email."]
+                else:
+                    stale_user = existing_email_user
+
+        existing_username_user = User.objects.filter(
+            username__iexact=username,
+            deleted_at__isnull=True
+        ).first()
+
+        if existing_username_user:
+            if not stale_user or existing_username_user.id != stale_user.id:
+                errors["username"] = ["Username already exists."]
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        self.context["stale_user"] = stale_user
+        return attrs
+
+    def create(self, validated_data):
+        request = self.context["request"]
+        creator = request.user
+
+        validated_data.pop("confirm_password") 
+        password = validated_data.pop("password")
+
+        organization = None
+        role = UserRoleChoices.USER
+
+        if creator.role == UserRoleChoices.SUPER_ADMIN:
+            org_id = validated_data.pop("organization_id", None)
+            
+            try:
+                organization = Organization.objects.get(id=org_id)
+            except Organization.DoesNotExist:
+                raise serializers.ValidationError({
+                    "organization_id": "No organization found with the provided ID."
+                })
+            
+            if not organization.is_active:
+                 raise serializers.ValidationError({
+                    "organization_id": "Cannot create Tenant Admin for a deactivated organization."
+                })
+            
+            role = UserRoleChoices.TENANT_ADMIN
+
+        elif creator.role == UserRoleChoices.TENANT_ADMIN:
+            organization = creator.organization
+            role = UserRoleChoices.USER
+
+        stale_user = self.context.get("stale_user")
+
+        if stale_user:
+            # OVERWRITE
+            user = stale_user
+            user.username = validated_data["username"]
+            user.first_name = validated_data["first_name"]
+            user.last_name = validated_data["last_name"]
+            user.email = validated_data["email"]
+            user.role = role
+            user.organization = organization
+            user.is_email_verified = False 
+            user.is_active = False 
+            user.set_password(password)
+            user.save()
+            return user
+        else:
+            # CREATE NEW
+            user = User(
+                username=validated_data["username"],
+                first_name=validated_data["first_name"],
+                last_name=validated_data["last_name"],
+                email=validated_data["email"],
+                role=role,
+                organization=organization,
+                is_email_verified=False,
+                is_active=False,
+            )
+            user.set_password(password)
+            user.save()
+            return user
+
 class UserListDetailSerializer(serializers.ModelSerializer):
 
+    organization = OrganizationSerializer(read_only=True)
     class Meta:
         model = User
         fields = (
@@ -14,15 +187,19 @@ class UserListDetailSerializer(serializers.ModelSerializer):
             'first_name', 
             'last_name', 
             'role', 
+            'organization',
+            'is_active', 
+            'is_email_verified',
             'created_at', 
             'updated_at',
-            'is_active', 
+            'deleted_at'
         )
 
 class UserMiniDetailSerializer(serializers.ModelSerializer):
     """
     Serializer for displaying minimal user details (used in tasks).
     """
+    organization = OrganizationSerializer(read_only=True)
     class Meta:
         model = User
         fields = (
@@ -30,7 +207,11 @@ class UserMiniDetailSerializer(serializers.ModelSerializer):
             'username', 
             'email', 
             'first_name', 
-            'last_name'
+            'last_name',
+            'organization',
+            'created_at', 
+
+
         )
 
 
@@ -62,13 +243,20 @@ class UserUpdateSerializer(serializers.Serializer):
         request_user = self.context.get("request_user")
         
         if "is_active" in attrs:
-            # If the user is NOT an Admin, they cannot change is_active.
-            if request_user and request_user.role != UserRoleChoices.ADMIN:
-                
+            is_allowed = False
+            if request_user:
+                if request_user.role == UserRoleChoices.TENANT_ADMIN:
+                    is_allowed = True
+                elif request_user.role == UserRoleChoices.SUPER_ADMIN:
+                    # Super Admin can only modify Tenant Admin
+                    if self.instance.role == UserRoleChoices.TENANT_ADMIN:
+                        is_allowed = True
+
+            if not is_allowed:
                 # Check 1: Prevent changing the value
                 if getattr(self.instance, 'is_active') != attrs['is_active']:
                     raise serializers.ValidationError({
-                        "is_active": ["Only administrators can modify the 'is_active' status."]
+                        "is_active": ["Only tenant admins can modify the 'is_active' status."]
                     })
                 
                 # If they tried to change it to the same value, we still remove it
@@ -94,3 +282,63 @@ class UserUpdateSerializer(serializers.Serializer):
             setattr(instance, field, value)
         instance.save(update_fields=validated_data.keys())
         return instance
+    
+
+
+# only tenant admin can invite user
+class InviteUserSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate(self, attrs):
+        request = self.context["request"]
+        inviter = request.user
+
+        #  Only TENANT_ADMIN can invite
+        if inviter.role != UserRoleChoices.TENANT_ADMIN:
+            raise serializers.ValidationError(
+                "Only tenant admins can invite users."
+            )
+
+        #  Tenant admin must belong to an organization
+        if not inviter.organization:
+            raise serializers.ValidationError(
+                "Tenant admin must belong to an organization."
+            )
+
+        
+        #  Check for existing user
+        existing_user = User.objects.filter(
+            email=attrs["email"],
+        ).first()
+
+        if existing_user:
+            # Block Verified
+            if existing_user.is_email_verified:
+                raise serializers.ValidationError(
+                    "A user with this email already exists."
+                )
+            
+            # Block Pending (Active Token)
+            token_key = f"user_verification_active_token:{existing_user.id}"
+            if cache.get(token_key):
+                 raise serializers.ValidationError(
+                    "User verification is already pending for this email."
+                )
+            
+            # Allow Stale (Unverified + No Token) -> Proceed to send invite which will overwrite on accept
+            pass
+
+        return attrs
+    
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        # Do NOT leak whether email exists
+        if not User.objects.filter(
+            email=value,
+            is_email_verified=True,
+            deleted_at__isnull=True
+        ).exists():
+            pass
+        return value
