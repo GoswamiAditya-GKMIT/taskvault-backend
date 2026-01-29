@@ -18,6 +18,11 @@ from core.constants import (
     PREMIUM_PLAN_AMOUNT_IN_PAISA,
     PREMIUM_PLAN_CURRENCY_CODE,
     FREE_TIER_TASK,
+    RECONSILE_SUBSCRIPTIONS_JOB_TIME,
+    DELETE_UNVERIFIED_USERS_JOB_TIME,
+    DELETE_SOFT_DELETED_USERS_TIME,
+    DELETE_BLACKLISTED_TOKENS_JOB_TIME,
+    DELETE_OLD_LOGS_JOB_TIME,
 )
 
 
@@ -165,23 +170,23 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_BEAT_SCHEDULE = {
     "reconcile_pending_subscriptions": {
         "task": "subscriptions.tasks.reconcile_pending_subscriptions_job",
-        "schedule": 3600.0,  # Every 60 minutes
+        "schedule": RECONSILE_SUBSCRIPTIONS_JOB_TIME,  # Every 60 minutes
     },
     "hard_delete_unverified_users": {
         "task": "users.tasks.hard_delete_unverified_users",
-        "schedule": 86400.0,  # Every 24 hours
+        "schedule": DELETE_UNVERIFIED_USERS_JOB_TIME,  # Every 24 hours
     },
     "clear_blacklisted_tokens": {
         "task": "users.tasks.clear_blacklisted_tokens",
-        "schedule": 86400.0,  # Every 24 hours
+        "schedule": DELETE_BLACKLISTED_TOKENS_JOB_TIME,  # Every 24 hours
     },
     "delete_old_logs": {
         "task": "core.tasks.delete_old_logs",
-        "schedule": 2592000.0,  # Every 30 days
+        "schedule": DELETE_OLD_LOGS_JOB_TIME,  # Every 30 days
     },
     "hard_delete_soft_deleted_users": {
         "task": "users.tasks.hard_delete_soft_deleted_users",
-        "schedule": 86400.0,  # Every 24 hours
+        "schedule": DELETE_SOFT_DELETED_USERS_TIME,  # Every 24 hours
     },
 }
 

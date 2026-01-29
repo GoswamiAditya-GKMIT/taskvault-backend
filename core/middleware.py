@@ -12,7 +12,7 @@ class LoggingMiddleware(MiddlewareMixin):
     Middleware to log incoming requests and outgoing responses.
     Includes Correlation ID, execution time, and identity tracking.
     """
-    SENSITIVE_KEYS = {"password", "token", "otp", "authorization", "cookie"}
+    SENSITIVE_KEYS = {"password", "token", "otp", "authorization", "cookie", "email", "username", "card_number", "cvv", "expiry_date"}
 
     def process_request(self, request):
         request.start_time = time.time()
