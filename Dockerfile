@@ -14,9 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
+# Note: --no-deps is NOT used. We install Django first to satisfy the resolver,
+# then install rest. This avoids pip's strict resolver false-positive with Django 6.0.
 COPY requirements.txt .
 RUN pip install --upgrade pip --no-cache-dir && \
+    pip install --no-cache-dir Django==6.0 && \
     pip install --no-cache-dir -r requirements.txt
+
 
 # Copy project source code
 COPY . .
