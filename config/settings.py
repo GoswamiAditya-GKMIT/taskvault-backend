@@ -40,7 +40,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("secret_key")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 
@@ -231,6 +231,8 @@ FRONETEND_PASSWORD_RESET_PATH="/auth/reset-password/"
 INIVTE_LINK=os.getenv("REGISTER_INVITE_LINK_PATH")
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
 
 # Razorpay Settings
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")

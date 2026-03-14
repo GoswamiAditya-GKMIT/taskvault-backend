@@ -1,0 +1,56 @@
+# Python bytecode / cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Django-specific
+*.log
+logs/
+db.sqlite3
+media/
+staticfiles/
+
+# Profiling artifacts
+profiles/
+celerybeat-schedule*
+
+# Docker config (no circular inclusion)
+.dockerignore
+docker-compose*.yml
+nginx/
+
+# CI/CD
+.github/
+scripts/
+
+# Git
+.git/
+.gitignore
+
+# Secrets — NEVER bake into image
+.env
+.env.*
+*.env
+
+# IDEs / OS
+.vscode/
+.idea/
+*.DS_Store
+*.swp
+
+# Key files (already exist on EC2)
+*.pem
+*.key
+*.crt

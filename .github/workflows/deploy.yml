@@ -1,0 +1,242 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [feature/ci-cd]
+  pull_request:
+    branches: [feature/ci-cd]
+    types: [closed]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/taskvault-backend
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 1 — Build and push Docker image to GHCR
+  # ─────────────────────────────────────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push to GHCR
+    runs-on: ubuntu-latest
+
+    # Run on direct push OR on a merged PR
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags + labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha
+            type=raw,value=latest
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # JOB 2 — Deploy to EC2
+  # ─────────────────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1
+        env:
+          # ── GHCR Auth ────────────────────────────────────────────────────────
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+          DOCKER_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          # ── Django ───────────────────────────────────────────────────────────
+          secret_key: ${{ secrets.DJANGO_SECRET_KEY }}
+          # ── PostgreSQL ───────────────────────────────────────────────────────
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_HOST: db
+          POSTGRES_PORT: "5432"
+          # ── Redis / Celery ───────────────────────────────────────────────────
+          CACHES_LOCATIONS: redis://redis:6379/1
+          CELERY_BROKER_URL: redis://redis:6379/2
+          # ── Email ────────────────────────────────────────────────────────────
+          EMAIL_HOST_USER: ${{ secrets.EMAIL_HOST_USER }}
+          EMAIL_HOST_PASSWORD: ${{ secrets.EMAIL_HOST_PASSWORD }}
+          DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+          # ── Super Admin ──────────────────────────────────────────────────────
+          SUPER_ADMIN_EMAIL: ${{ secrets.SUPER_ADMIN_EMAIL }}
+          SUPER_ADMIN_USERNAME: ${{ secrets.SUPER_ADMIN_USERNAME }}
+          SUPER_ADMIN_PASSWORD: ${{ secrets.SUPER_ADMIN_PASSWORD }}
+          # ── Razorpay ─────────────────────────────────────────────────────────
+          RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
+          RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
+          RAZORPAY_WEBHOOK_SECRET: ${{ secrets.RAZORPAY_WEBHOOK_SECRET }}
+          # ── URLs ─────────────────────────────────────────────────────────────
+          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          BASE_URL: ${{ secrets.BASE_URL }}
+          REGISTER_INVITE_LINK_PATH: ${{ secrets.REGISTER_INVITE_LINK_PATH }}
+          # ── Domain & SSL ──────────────────────────────────────────────────────
+          DOMAIN_NAME: taskvault.site
+          CERTBOT_EMAIL: ${{ secrets.CERTBOT_EMAIL }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: >
+            GHCR_TOKEN,GHCR_USER,DOCKER_IMAGE,
+            secret_key,
+            POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_HOST,POSTGRES_PORT,
+            CACHES_LOCATIONS,CELERY_BROKER_URL,
+            EMAIL_HOST_USER,EMAIL_HOST_PASSWORD,DEFAULT_FROM_EMAIL,
+            SUPER_ADMIN_EMAIL,SUPER_ADMIN_USERNAME,SUPER_ADMIN_PASSWORD,
+            RAZORPAY_KEY_ID,RAZORPAY_KEY_SECRET,RAZORPAY_WEBHOOK_SECRET,
+            FRONTEND_URL,BASE_URL,REGISTER_INVITE_LINK_PATH,
+            DOMAIN_NAME,CERTBOT_EMAIL
+          script: |
+            set -e
+
+            APP_DIR="/home/${{ secrets.EC2_USER }}/taskvault-backend"
+            REPO_URL="https://github.com/${{ github.repository }}.git"
+
+            # ─── 1. Bootstrap: Install Docker if missing ──────────────────────
+            if ! command -v docker &> /dev/null; then
+              echo "==> Installing Docker..."
+              sudo apt-get update -y
+              sudo apt-get install -y ca-certificates curl gnupg
+              sudo install -m 0755 -d /etc/apt/keyrings
+              curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+                sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+              sudo chmod a+r /etc/apt/keyrings/docker.gpg
+              echo \
+                "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+                https://download.docker.com/linux/ubuntu \
+                $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+                sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+              sudo apt-get update -y
+              sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
+                docker-buildx-plugin docker-compose-plugin
+              sudo usermod -aG docker $USER
+              echo "==> Docker installed successfully."
+            else
+              echo "==> Docker already present: $(docker --version)"
+            fi
+
+            # ─── 2. Clone or update repository ───────────────────────────────
+            if [ ! -d "$APP_DIR" ]; then
+              echo "==> Cloning repository..."
+              git clone "$REPO_URL" "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+            git fetch origin feature/ci-cd
+            git checkout feature/ci-cd
+            git reset --hard origin/feature/ci-cd
+
+            # ─── 3. Write production .env ────────────────────────────────────
+            echo "==> Writing .env..."
+            > .env
+            echo "secret_key=${secret_key}" >> .env
+            echo "POSTGRES_DB=${POSTGRES_DB}" >> .env
+            echo "POSTGRES_USER=${POSTGRES_USER}" >> .env
+            echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" >> .env
+            echo "POSTGRES_HOST=${POSTGRES_HOST}" >> .env
+            echo "POSTGRES_PORT=${POSTGRES_PORT}" >> .env
+            echo "CACHES_LOCATIONS=${CACHES_LOCATIONS}" >> .env
+            echo "CELERY_BROKER_URL=${CELERY_BROKER_URL}" >> .env
+            echo "EMAIL_HOST_USER=${EMAIL_HOST_USER}" >> .env
+            echo "EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}" >> .env
+            echo "DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL}" >> .env
+            echo "SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL}" >> .env
+            echo "SUPER_ADMIN_USERNAME=${SUPER_ADMIN_USERNAME}" >> .env
+            echo "SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD}" >> .env
+            echo "RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID}" >> .env
+            echo "RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET}" >> .env
+            echo "RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET}" >> .env
+            echo "FRONTEND_URL=${FRONTEND_URL}" >> .env
+            echo "BASE_URL=${BASE_URL}" >> .env
+            echo "REGISTER_INVITE_LINK_PATH=${REGISTER_INVITE_LINK_PATH}" >> .env
+
+            # ─── 4. Login to GHCR and pull latest image ───────────────────────
+            echo "==> Logging in to GHCR..."
+            echo "$GHCR_TOKEN" | sudo docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+            echo "==> Pulling latest image: $DOCKER_IMAGE"
+            sudo docker pull "$DOCKER_IMAGE"
+
+            # Inject IMAGE into .env for docker-compose substitution
+            echo "IMAGE=${DOCKER_IMAGE}" >> .env
+
+            # ─── 5. Smart SSL: check if cert already exists ─────────────────
+            CERT_PATH="/var/lib/docker/volumes/taskvault-backend_certbot_certs/_data/live/${DOMAIN_NAME}/fullchain.pem"
+
+            if sudo test -f "$CERT_PATH"; then
+              # ── Certs exist → start everything with HTTPS ──────────────────
+              echo "==> SSL certificates found. Starting with HTTPS config..."
+              sudo docker compose down
+              sudo docker compose up -d
+
+            else
+              # ── No certs → provision via HTTP first ────────────────────────
+              echo "==> No SSL certificates found. Provisioning via HTTP..."
+
+              # Swap to HTTP-only nginx config for ACME challenge
+              cp nginx/nginx.conf nginx/nginx.ssl.conf
+              cp nginx/nginx.http-only.conf nginx/nginx.conf
+
+              sudo docker compose up -d nginx web db redis
+
+              # Wait for nginx to accept connections
+              sleep 5
+
+              echo "==> Requesting Let's Encrypt certificate for ${DOMAIN_NAME}..."
+              sudo docker compose run --rm certbot certonly \
+                --webroot \
+                --webroot-path=/var/www/certbot \
+                --email "${CERTBOT_EMAIL}" \
+                --agree-tos \
+                --no-eff-email \
+                -d "${DOMAIN_NAME}" \
+                -d "www.${DOMAIN_NAME}"
+
+              # Restore the full SSL nginx config and bring everything up
+              echo "==> Certificate obtained! Switching to HTTPS..."
+              cp nginx/nginx.ssl.conf nginx/nginx.conf
+              rm -f nginx/nginx.ssl.conf
+              sudo docker compose down
+              sudo docker compose up -d
+            fi
+
+            # ─── 6. Cleanup old images ────────────────────────────────────────
+            sudo docker image prune -f
+
+            echo "==> Deployment complete! Site live at https://${DOMAIN_NAME}"
