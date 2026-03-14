@@ -13,13 +13,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-# Note: --no-deps is NOT used. We install Django first to satisfy the resolver,
-# then install rest. This avoids pip's strict resolver false-positive with Django 6.0.
+# Install Python dependencies in two stages:
+# Stage A: everything except django-celery-beat
+# Stage B: django-celery-beat alone with --no-deps
+# Reason: django-celery-beat==2.8.1 has a stale "Django<6.0" metadata constraint,
+# but it works correctly with Django 6.0 (proven by the local virtualenv).
 COPY requirements.txt .
 RUN pip install --upgrade pip --no-cache-dir && \
-    pip install --no-cache-dir Django==6.0 && \
-    pip install --no-cache-dir -r requirements.txt
+    grep -v "django-celery-beat" requirements.txt | pip install --no-cache-dir -r /dev/stdin && \
+    pip install --no-cache-dir --no-deps django-celery-beat==2.8.1
+
 
 
 # Copy project source code
