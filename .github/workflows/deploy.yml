@@ -207,14 +207,18 @@ jobs:
               sudo DOCKER_IMAGE="$DOCKER_IMAGE" docker compose up -d
 
             else
-              # ── No certs → use standalone certbot (most reliable approach) ──
-              # Standalone: certbot binds to port 80 itself — no nginx/volume needed
+              # ── No certs → use standalone certbot ────────────────────────
               echo "==> No SSL certificates found. Provisioning via standalone certbot..."
 
-              # Stop nginx so port 80 is free for standalone certbot
+              # Free port 80: stop Docker nginx + any system-level web server
               sudo docker compose stop nginx || true
+              sudo systemctl stop nginx 2>/dev/null || true
+              sudo systemctl stop apache2 2>/dev/null || true
+              # Kill any remaining process on port 80 (host-level)
+              sudo fuser -k 80/tcp 2>/dev/null || true
+              sleep 2
 
-              echo "==> Requesting Let's Encrypt certificate for ${DOMAIN_NAME}..."
+              echo "==> Port 80 is free. Requesting Let's Encrypt certificate for ${DOMAIN_NAME}..."
               sudo docker run --rm \
                 -p 80:80 \
                 -v taskvault-backend_certbot_certs:/etc/letsencrypt \
@@ -229,6 +233,7 @@ jobs:
               echo "==> Certificate obtained! Starting full stack with HTTPS..."
               sudo DOCKER_IMAGE="$DOCKER_IMAGE" docker compose up -d
             fi
+
 
 
             # ─── 6. Cleanup old images ────────────────────────────────────────
