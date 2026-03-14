@@ -194,8 +194,8 @@ jobs:
             echo "==> Pulling latest image: $DOCKER_IMAGE"
             sudo docker pull "$DOCKER_IMAGE"
 
-            # Inject IMAGE into .env for docker-compose substitution
-            echo "IMAGE=${DOCKER_IMAGE}" >> .env
+            # Inject DOCKER_IMAGE into .env for docker-compose substitution
+            echo "DOCKER_IMAGE=${DOCKER_IMAGE}" >> .env
 
             # ─── 5. Smart SSL: check if cert already exists ─────────────────
             CERT_PATH="/var/lib/docker/volumes/taskvault-backend_certbot_certs/_data/live/${DOMAIN_NAME}/fullchain.pem"
@@ -204,7 +204,7 @@ jobs:
               # ── Certs exist → start everything with HTTPS ──────────────────
               echo "==> SSL certificates found. Starting with HTTPS config..."
               sudo docker compose down
-              sudo docker compose up -d
+              sudo DOCKER_IMAGE="$DOCKER_IMAGE" docker compose up -d
 
             else
               # ── No certs → provision via HTTP first ────────────────────────
@@ -225,7 +225,7 @@ jobs:
               sleep 10
 
               echo "==> Requesting Let's Encrypt certificate for ${DOMAIN_NAME}..."
-              sudo docker compose run --rm --entrypoint certbot certbot certonly \
+              sudo docker compose run --rm certbot certonly \
                 --webroot \
                 --webroot-path=/var/www/certbot \
                 --email "${CERTBOT_EMAIL}" \
@@ -239,7 +239,7 @@ jobs:
               cp nginx/nginx.ssl.conf nginx/nginx.conf
               rm -f nginx/nginx.ssl.conf
               sudo docker compose down
-              sudo docker compose up -d
+              sudo DOCKER_IMAGE="$DOCKER_IMAGE" docker compose up -d
             fi
 
             # ─── 6. Cleanup old images ────────────────────────────────────────

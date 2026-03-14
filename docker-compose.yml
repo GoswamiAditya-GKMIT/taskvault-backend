@@ -30,7 +30,7 @@ services:
 
   # ── Django / Gunicorn ────────────────────────────────────────────────────────
   web:
-    image: ${IMAGE:-taskvault-backend:local}
+    image: ${DOCKER_IMAGE:-taskvault-backend:local}
     container_name: taskvault_web
     env_file: .env
     environment:
@@ -53,7 +53,7 @@ services:
 
   # ── Celery Worker ────────────────────────────────────────────────────────────
   celery_worker:
-    image: ${IMAGE:-taskvault-backend:local}
+    image: ${DOCKER_IMAGE:-taskvault-backend:local}
     container_name: taskvault_celery_worker
     env_file: .env
     environment:
@@ -73,7 +73,7 @@ services:
 
   # ── Celery Beat ──────────────────────────────────────────────────────────────
   celery_beat:
-    image: ${IMAGE:-taskvault-backend:local}
+    image: ${DOCKER_IMAGE:-taskvault-backend:local}
     container_name: taskvault_celery_beat
     env_file: .env
     environment:
@@ -107,15 +107,13 @@ services:
       - web
     restart: unless-stopped
 
-  # ── Certbot (One-shot for cert renewal) ─────────────────────────────────────
+  # ── Certbot (one-shot — no entrypoint, no restart) ─────────────────────────
   certbot:
-    image: certbot/certbot
+    image: certbot/certbot:latest
     container_name: taskvault_certbot
     volumes:
       - certbot_webroot:/var/www/certbot
       - certbot_certs:/etc/letsencrypt
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-    restart: unless-stopped
 
 # ── Volumes ───────────────────────────────────────────────────────────────────
 volumes:
