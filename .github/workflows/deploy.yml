@@ -220,7 +220,7 @@ jobs:
               sleep 5
 
               echo "==> Requesting Let's Encrypt certificate for ${DOMAIN_NAME}..."
-              sudo docker compose run --rm certbot certonly \
+              sudo docker compose run --rm --entrypoint certbot certbot certonly \
                 --webroot \
                 --webroot-path=/var/www/certbot \
                 --email "${CERTBOT_EMAIL}" \
