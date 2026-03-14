@@ -207,40 +207,29 @@ jobs:
               sudo DOCKER_IMAGE="$DOCKER_IMAGE" docker compose up -d
 
             else
-              # ── No certs → provision via HTTP first ────────────────────────
-              echo "==> No SSL certificates found. Provisioning via HTTP..."
+              # ── No certs → use standalone certbot (most reliable approach) ──
+              # Standalone: certbot binds to port 80 itself — no nginx/volume needed
+              echo "==> No SSL certificates found. Provisioning via standalone certbot..."
 
-              # Swap to HTTP-only nginx config for ACME challenge
-              cp nginx/nginx.conf nginx/nginx.ssl.conf
-              cp nginx/nginx.http-only.conf nginx/nginx.conf
-
-              # Start db and redis first, then web, then force-recreate nginx
-              # with the HTTP-only config so it actually loads the new file
-              sudo docker compose up -d db redis
-              sleep 3
-              sudo docker compose up -d web
-              sudo docker compose up -d --force-recreate nginx
-
-              # Wait for nginx to be fully ready before certbot fires
-              sleep 10
+              # Stop nginx so port 80 is free for standalone certbot
+              sudo docker compose stop nginx || true
 
               echo "==> Requesting Let's Encrypt certificate for ${DOMAIN_NAME}..."
-              sudo docker compose run --rm certbot certonly \
-                --webroot \
-                --webroot-path=/var/www/certbot \
+              sudo docker run --rm \
+                -p 80:80 \
+                -v taskvault-backend_certbot_certs:/etc/letsencrypt \
+                certbot/certbot certonly \
+                --standalone \
+                --non-interactive \
                 --email "${CERTBOT_EMAIL}" \
                 --agree-tos \
                 --no-eff-email \
-                -d "${DOMAIN_NAME}" \
-                -d "www.${DOMAIN_NAME}"
+                -d "${DOMAIN_NAME}"
 
-              # Restore the full SSL nginx config and bring everything up
-              echo "==> Certificate obtained! Switching to HTTPS..."
-              cp nginx/nginx.ssl.conf nginx/nginx.conf
-              rm -f nginx/nginx.ssl.conf
-              sudo docker compose down
+              echo "==> Certificate obtained! Starting full stack with HTTPS..."
               sudo DOCKER_IMAGE="$DOCKER_IMAGE" docker compose up -d
             fi
+
 
             # ─── 6. Cleanup old images ────────────────────────────────────────
             sudo docker image prune -f
