@@ -214,10 +214,15 @@ jobs:
               cp nginx/nginx.conf nginx/nginx.ssl.conf
               cp nginx/nginx.http-only.conf nginx/nginx.conf
 
-              sudo docker compose up -d nginx web db redis
+              # Start db and redis first, then web, then force-recreate nginx
+              # with the HTTP-only config so it actually loads the new file
+              sudo docker compose up -d db redis
+              sleep 3
+              sudo docker compose up -d web
+              sudo docker compose up -d --force-recreate nginx
 
-              # Wait for nginx to accept connections
-              sleep 5
+              # Wait for nginx to be fully ready before certbot fires
+              sleep 10
 
               echo "==> Requesting Let's Encrypt certificate for ${DOMAIN_NAME}..."
               sudo docker compose run --rm --entrypoint certbot certbot certonly \
