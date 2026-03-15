@@ -13,6 +13,15 @@ echo "[entrypoint] PostgreSQL is ready."
 
 SERVICE="${SERVICE:-web}"
 
+# Check for New Relic license key to dynamically run APM
+if [ -n "$NEW_RELIC_LICENSE_KEY" ]; then
+    echo "[entrypoint] New Relic enabled for $SERVICE."
+    EXEC_PREFIX="newrelic-admin run-program"
+else
+    echo "[entrypoint] New Relic disabled (No license key found)."
+    EXEC_PREFIX=""
+fi
+
 case "$SERVICE" in
   web)
     echo "[entrypoint] Running database migrations..."
@@ -25,7 +34,7 @@ case "$SERVICE" in
     python manage.py seed_superadmin
 
     echo "[entrypoint] Starting Gunicorn..."
-    exec gunicorn config.wsgi:application \
+    exec $EXEC_PREFIX gunicorn config.wsgi:application \
       --bind 0.0.0.0:8000 \
       --workers 3 \
       --timeout 120 \
@@ -37,12 +46,12 @@ case "$SERVICE" in
 
   celery_worker)
     echo "[entrypoint] Starting Celery Worker..."
-    exec celery -A config worker -l info --concurrency=4
+    exec $EXEC_PREFIX celery -A config worker -l info --concurrency=4
     ;;
 
   celery_beat)
     echo "[entrypoint] Starting Celery Beat..."
-    exec celery -A config beat -l info \
+    exec $EXEC_PREFIX celery -A config beat -l info \
       --scheduler django_celery_beat.schedulers:DatabaseScheduler
     ;;
 

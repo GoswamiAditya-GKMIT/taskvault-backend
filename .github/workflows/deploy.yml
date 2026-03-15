@@ -9,7 +9,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # GHCR requires all-lowercase image names
   IMAGE_NAME: goswamiaditya-gkmit/taskvault-backend
 
 jobs:
@@ -79,6 +78,9 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GHCR_USER: ${{ github.actor }}
           DOCKER_IMAGE: ghcr.io/goswamiaditya-gkmit/taskvault-backend:latest
+          # ── New Relic APM ────────────────────────────────────────────────────
+          NEW_RELIC_LICENSE_KEY: ${{ secrets.NEW_RELIC_LICENSE_KEY }}
+          NEW_RELIC_APP_NAME: ${{ secrets.NEW_RELIC_APP_NAME }}
           # ── Django ───────────────────────────────────────────────────────────
           DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           # ── PostgreSQL ───────────────────────────────────────────────────────
@@ -115,6 +117,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: >
             GHCR_TOKEN,GHCR_USER,DOCKER_IMAGE,
+            NEW_RELIC_LICENSE_KEY,NEW_RELIC_APP_NAME,
             DJANGO_SECRET_KEY,
             POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_HOST,POSTGRES_PORT,
             CACHES_LOCATIONS,CELERY_BROKER_URL,
@@ -166,6 +169,8 @@ jobs:
             # ─── 3. Write production .env ────────────────────────────────────
             echo "==> Writing .env..."
             > .env
+            echo "NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}" >> .env
+            echo "NEW_RELIC_APP_NAME=${NEW_RELIC_APP_NAME}" >> .env
             echo "DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}" >> .env
             echo "POSTGRES_DB=${POSTGRES_DB}" >> .env
             echo "POSTGRES_USER=${POSTGRES_USER}" >> .env
