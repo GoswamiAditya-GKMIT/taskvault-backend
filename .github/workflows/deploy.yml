@@ -198,10 +198,6 @@ jobs:
             echo "DOCKER_IMAGE=${DOCKER_IMAGE}" >> .env
 
             # ─── 5. Smart SSL: check if cert already exists ─────────────────
-            # Temporary wipe: completely destroy the certbot volume so it provisions both domains
-            sudo docker compose down || true
-            sudo docker volume rm taskvault-backend_certbot_certs || true
-
             CERT_PATH="/var/lib/docker/volumes/taskvault-backend_certbot_certs/_data/live/${DOMAIN_NAME}/fullchain.pem"
 
             if sudo test -f "$CERT_PATH"; then
@@ -222,7 +218,7 @@ jobs:
               sudo fuser -k 80/tcp 2>/dev/null || true
               sleep 2
 
-              echo "==> Port 80 is free. Requesting Let's Encrypt certificate for ${DOMAIN_NAME} and www.${DOMAIN_NAME}..."
+              echo "==> Port 80 is free. Requesting Let's Encrypt certificate for ${DOMAIN_NAME}..."
               sudo docker run --rm \
                 -p 80:80 \
                 -v taskvault-backend_certbot_certs:/etc/letsencrypt \
@@ -232,8 +228,7 @@ jobs:
                 --email "${CERTBOT_EMAIL}" \
                 --agree-tos \
                 --no-eff-email \
-                -d "${DOMAIN_NAME}" \
-                -d "www.${DOMAIN_NAME}"
+                -d "${DOMAIN_NAME}"
 
               echo "==> Certificate obtained! Starting full stack with HTTPS..."
               sudo DOCKER_IMAGE="$DOCKER_IMAGE" docker compose up -d
