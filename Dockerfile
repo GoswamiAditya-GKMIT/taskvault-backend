@@ -31,6 +31,7 @@ COPY . .
 # Create a non-root user and assign ownership
 RUN addgroup --system appgroup && \
     adduser --system --ingroup appgroup appuser && \
+    mkdir -p /app/logs /app/staticfiles && \
     chown -R appuser:appgroup /app
 
 # Make the entrypoint executable
