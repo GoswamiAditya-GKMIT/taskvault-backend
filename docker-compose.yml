@@ -48,7 +48,6 @@ services:
       - "8000"
     volumes:
       - static_files:/app/staticfiles
-      - app_logs:/app/logs
     restart: unless-stopped
 
   # ── Celery Worker ────────────────────────────────────────────────────────────
@@ -67,8 +66,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - app_logs:/app/logs
     restart: unless-stopped
 
   # ── Celery Beat ──────────────────────────────────────────────────────────────
@@ -87,8 +84,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - app_logs:/app/logs
     restart: unless-stopped
 
   # ── Nginx (reverse proxy + SSL termination) ──────────────────────────────────
@@ -119,6 +114,5 @@ services:
 volumes:
   postgres_data:     # database — never deleted by CI/CD
   static_files:      # shared between web and nginx
-  app_logs:          # shared log files
   certbot_webroot:   # ACME challenge files
   certbot_certs:     # Let's Encrypt certificates
