@@ -43,6 +43,7 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
+CSRF_TRUSTED_ORIGINS = [os.getenv("FRONTEND_URL", "https://taskvault.site")]
 
 
 # Application definition
