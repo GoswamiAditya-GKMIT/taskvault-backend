@@ -198,6 +198,10 @@ jobs:
             echo "DOCKER_IMAGE=${DOCKER_IMAGE}" >> .env
 
             # ─── 5. Smart SSL: check if cert already exists ─────────────────
+            # Temporary wipe: completely destroy the certbot volume so it provisions both domains
+            sudo docker compose down || true
+            sudo docker volume rm taskvault-backend_certbot_certs || true
+
             CERT_PATH="/var/lib/docker/volumes/taskvault-backend_certbot_certs/_data/live/${DOMAIN_NAME}/fullchain.pem"
 
             if sudo test -f "$CERT_PATH"; then
