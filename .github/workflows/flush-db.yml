@@ -1,17 +1,13 @@
 name: Flush Production Database (DANGER)
 
 on:
-  workflow_dispatch:
-    inputs:
-      confirm_flush:
-        description: 'Type "I AM SURE" to confirm wiping the database'
-        required: true
-        default: ''
+  push:
+    branches:
+      - feature/ci-cd
 
 jobs:
   flush-db:
     runs-on: ubuntu-latest
-    if: github.event.inputs.confirm_flush == 'I AM SURE'
     steps:
       - name: SSH into EC2 and Flush Django Database
         uses: appleboy/ssh-action@v1
