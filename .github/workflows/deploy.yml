@@ -80,7 +80,7 @@ jobs:
           GHCR_USER: ${{ github.actor }}
           DOCKER_IMAGE: ghcr.io/goswamiaditya-gkmit/taskvault-backend:latest
           # ── Django ───────────────────────────────────────────────────────────
-          secret_key: ${{ secrets.DJANGO_SECRET_KEY }}
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
           # ── PostgreSQL ───────────────────────────────────────────────────────
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
@@ -115,7 +115,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           envs: >
             GHCR_TOKEN,GHCR_USER,DOCKER_IMAGE,
-            secret_key,
+            DJANGO_SECRET_KEY,
             POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,POSTGRES_HOST,POSTGRES_PORT,
             CACHES_LOCATIONS,CELERY_BROKER_URL,
             EMAIL_HOST_USER,EMAIL_HOST_PASSWORD,DEFAULT_FROM_EMAIL,
@@ -166,7 +166,7 @@ jobs:
             # ─── 3. Write production .env ────────────────────────────────────
             echo "==> Writing .env..."
             > .env
-            echo "secret_key=${secret_key}" >> .env
+            echo "DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}" >> .env
             echo "POSTGRES_DB=${POSTGRES_DB}" >> .env
             echo "POSTGRES_USER=${POSTGRES_USER}" >> .env
             echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" >> .env
