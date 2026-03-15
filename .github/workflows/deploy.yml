@@ -200,9 +200,6 @@ jobs:
             # ─── 5. Smart SSL: check if cert already exists ─────────────────
             CERT_PATH="/var/lib/docker/volumes/taskvault-backend_certbot_certs/_data/live/${DOMAIN_NAME}/fullchain.pem"
 
-            # Temporary: force cert renewal to include www
-            sudo rm -rf /var/lib/docker/volumes/taskvault-backend_certbot_certs/_data/live/* || true
-
             if sudo test -f "$CERT_PATH"; then
               # ── Certs exist → start everything with HTTPS ──────────────────
               echo "==> SSL certificates found. Starting with HTTPS config..."
