@@ -1,0 +1,33 @@
+name: Flush Production Database (DANGER)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_flush:
+        description: 'Type "I AM SURE" to confirm wiping the database'
+        required: true
+        default: ''
+
+jobs:
+  flush-db:
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm_flush == 'I AM SURE'
+    steps:
+      - name: SSH into EC2 and Flush Django Database
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            APP_DIR="/home/${{ secrets.EC2_USER }}/taskvault-backend"
+            cd "$APP_DIR"
+            
+            echo "==> Warning: Permanently wiping all data from the database..."
+            sudo docker compose exec -T web python manage.py flush --noinput
+            
+            echo "==> Re-seeding superadmin user..."
+            sudo docker compose exec -T web python manage.py seed_superadmin
+            
+            echo "==> Database successfully reset!"
