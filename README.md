@@ -1,7 +1,7 @@
 \# TaskVault
 
 TaskVault is a secure, role-based task management backend built using Django REST Framework.
-It provides structured task workflows, role-based access control, immutable task history, and collaborative comments.
+It provides structured task workflows, role-based access control, immutable task history, and collaborative comments
 The project follows clean architecture principles and is suitable for both individual task management and team-oriented workflows.
 
 ---
