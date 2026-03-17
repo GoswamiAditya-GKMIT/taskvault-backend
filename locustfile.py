@@ -1,6 +1,7 @@
 from locust import HttpUser, task, between, events
 import random
 import os
+import uuid
 
 class LoadTestUser(HttpUser):
     wait_time = between(1, 3)
@@ -47,3 +48,22 @@ class LoadTestUser(HttpUser):
         token = random.choice(self.tokens)
         headers = {"Authorization": f"Bearer {token}"}
         self.client.get("/api/v1/tasks/", headers=headers)
+
+    @task(1)
+    def create_task(self):
+        """
+        Authenticated task: Create a new task.
+        """
+        if not self.tokens:
+            return
+        
+        token = random.choice(self.tokens)
+        headers = {"Authorization": f"Bearer {token}"}
+        
+        payload = {
+            "title": f"Load Test Task {uuid.uuid4().hex[:8]}",
+            "description": "Locust performance test task",
+            "priority": random.choice(["HIGH", "MEDIUM", "LOW"]),
+        }
+        
+        self.client.post("/api/v1/tasks/", json=payload, headers=headers)

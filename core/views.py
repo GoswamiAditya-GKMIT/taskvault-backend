@@ -19,6 +19,16 @@ class HealthCheckAPIView(APIView):
     permission_classes = []  # Publicly accessible for monitoring tools
 
     def get(self, request):
+        # 0. Check for Fast Mode or Cached Health
+        is_fast = request.query_params.get("fast", "false").lower() == "true"
+        
+        # Short-term cache to prevent thundering herd during load tests
+        cache_key = "health_check_result"
+        if not is_fast:
+            cached_result = cache.get(cache_key)
+            if cached_result:
+                return Response(cached_result, status=status.HTTP_200_OK)
+
         health_status = {
             "status": "healthy",
             "services": {
@@ -28,6 +38,11 @@ class HealthCheckAPIView(APIView):
                 "celery": "unknown"
             }
         }
+        
+        if is_fast:
+             health_status["services"]["mode"] = "fast"
+             return Response(health_status, status=status.HTTP_200_OK)
+
         overall_healthy = True
 
         # 1. Database Check
@@ -55,20 +70,21 @@ class HealthCheckAPIView(APIView):
 
         # 3. Celery Check
         try:
-            inspector = current_app.control.inspect()
+            # Optimization: Reduced timeout for broadcast check
+            inspector = current_app.control.inspect(timeout=0.2)
             stats = inspector.stats()
             if stats:
                 health_status["services"]["celery"] = "ok"
             else:
                 health_status["services"]["celery"] = f"warning: no workers detected"
-                # Not failing overall health for no workers, but marking status
         except Exception as e:
             logger.error(f"Health Check Celery Error: {e}")
             health_status["services"]["celery"] = f"error: {str(e)}"
-            # overall_healthy = False # Depends on sensitivity requirements
 
         if not overall_healthy:
             health_status["status"] = "unhealthy"
             return Response(health_status, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
+        # Cache the result for 10 seconds
+        cache.set(cache_key, health_status, timeout=10)
         return Response(health_status, status=status.HTTP_200_OK)
