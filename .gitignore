@@ -29,3 +29,4 @@ logs/
 celerybeat-schedule*
 /scripts
 .coverage
+profiles/

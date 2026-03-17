@@ -67,10 +67,12 @@ INSTALLED_APPS = [
     'tasks',
     'subscriptions',
     'core',
+    'silk',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'silk.middleware.SilkyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -78,6 +80,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.LoggingMiddleware',
+    'pyinstrument.middleware.ProfilerMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -303,3 +306,13 @@ LOGGING = {
         },
     },
 }
+
+
+# --- SILK CONFIGURATION ---
+SILKY_PYTHON_PROFILER = True
+SILKY_INTERCEPT_PERCENT = 100
+SILKY_AUTHENTICATED_USER_ONLY = False # Set to True in production
+
+# --- PYINSTRUMENT CONFIGURATION ---
+PYINSTRUMENT_PROFILE_DIR = 'profiles'
+PYINSTRUMENT_FILENAME = "{total_time:.3f}s {path} {timestamp:.0f}.html"

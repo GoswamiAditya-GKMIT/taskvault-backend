@@ -29,6 +29,7 @@ urlpatterns = [
     path('subscriptions/', include('subscriptions.urls.ui')), # UI Templates
     path('api/v1/subscriptions/', include('subscriptions.urls.api')), # REST Resources
     path('api/v1/health/', include('core.urls')),
+    path('silk/', include('silk.urls', namespace='silk')),
 ]
 
 handler404 = "core.exceptions.custom_404_handler"
