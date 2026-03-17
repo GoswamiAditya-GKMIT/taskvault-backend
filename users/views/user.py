@@ -124,6 +124,20 @@ class UserListCreateAPIView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+class UserProfileAPIView(APIView):
+    """
+    GET /users/me/ -> Current user profile
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserListDetailSerializer(request.user)
+        return Response({
+            "status": "success",
+            "message": "Profile retrieved successfully",
+            "data": serializer.data
+        }, status=status.HTTP_200_OK)
     
 class UserDetailUpdateDeleteAPIView(APIView):
     permission_classes = [IsAuthenticated, CanAccessUser, CanDeleteUser]
