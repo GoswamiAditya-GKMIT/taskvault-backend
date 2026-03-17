@@ -42,7 +42,13 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [
+    "taskvault.site",
+    "www.taskvault.site",
+    "127.0.0.1",
+    "localhost",
+    "0.0.0.0"
+]
 CSRF_TRUSTED_ORIGINS = [os.getenv("FRONTEND_URL", "https://taskvault.site")]
 
 
@@ -60,6 +66,7 @@ INSTALLED_APPS = [
     'users',
     'tasks',
     'subscriptions',
+    'core',
 ]
 
 MIDDLEWARE = [
