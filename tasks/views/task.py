@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, NotFound
 from django.utils import timezone
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Prefetch
 from django.core.cache import cache
 from core.cache import generate_cache_key
 
@@ -146,8 +146,24 @@ class TaskDetailUpdateDeleteAPIView(APIView):
              query &= Q(deleted_at__isnull=True)
         # Admins can see deleted tasks (no filter needed)
 
+        # Optimized queryset to handle nested TaskDetailSerializer and subtask TaskListSerializer
+        queryset = Task.objects.select_related(
+            "owner", "owner__organization", 
+            "assignee", "assignee__organization", 
+            "organization", "parent_task"
+        ).prefetch_related(
+            Prefetch(
+                "subtasks",
+                queryset=Task.objects.filter(deleted_at__isnull=True).select_related(
+                    "owner", "owner__organization", 
+                    "assignee", "assignee__organization", 
+                    "organization"
+                ).order_by("created_at")
+            )
+        )
+
         task = get_object_or_404(
-            Task,
+            queryset,
             query,
             id=id
         )
