@@ -46,7 +46,7 @@ class UserListCreateAPIView(APIView):
         Tenant-aware queryset
         """
         user = request.user
-        qs = User.objects.all()
+        qs = User.objects.select_related("organization").all()
 
         active = request.query_params.get("active")
         if active:
