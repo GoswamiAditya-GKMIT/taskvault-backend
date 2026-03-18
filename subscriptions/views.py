@@ -91,13 +91,13 @@ class SubscriptionStatusAPIView(APIView):
 
 class SubscriptionAdminViewSet(viewsets.ReadOnlyModelViewSet):
 
-    queryset = Subscription.objects.all().order_by('-created_at')
+    queryset = Subscription.objects.select_related("organization").prefetch_related("payments").all().order_by('-created_at')
     serializer_class = SubscriptionSerializer
     permission_classes = [IsAuthenticated, IsSuperAdmin]
 
 class PaymentAdminViewSet(viewsets.ReadOnlyModelViewSet):
 
-    queryset = Payment.objects.all().order_by('-created_at')
+    queryset = Payment.objects.select_related("subscription", "subscription__organization").all().order_by('-created_at')
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated, IsSuperAdmin]
 
