@@ -71,7 +71,7 @@ class TaskListCreateAPIView(APIView):
                 "subtasks", 
                 filter=Q(subtasks__deleted_at__isnull=True)
             )
-        ).select_related("owner", "assignee")
+        ).select_related("owner", "assignee", "parent_task", "organization", "owner__organization", "assignee__organization")
 
         # FILTER: Hide deleted tasks for non-Admins
         if user.role != UserRoleChoices.TENANT_ADMIN:
