@@ -16,7 +16,7 @@ click-plugins==1.1.1.2
 click-repl==0.3.0
 ConfigArgParse==1.7.5
 coverage==7.13.4
-cron_descriptor==2.0.6
+cron_descriptor==1.4.5
 Django==6.0
 django-celery-beat==2.9.0
 django-redis==6.0.0
