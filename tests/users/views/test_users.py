@@ -39,7 +39,7 @@ class TestUserListAPI:
         tenantadmin_user.organization.is_active = False
         tenantadmin_user.organization.save()
         url = reverse('user-list-create')
-        assert tenantadmin_client.get(url).status_code != status.HTTP_403_FORBIDDEN
+        assert tenantadmin_client.get(url).status_code == status.HTTP_403_FORBIDDEN
 
     def test_list_users_normal_user_is_tenant_admin_or_super_admin_fallthrough(self, user_client):
         """
