@@ -117,12 +117,12 @@ class TestLoginSerializer:
     Unit tests for LoginSerializer validation logic.
     """
 
-    def test_login_serializer_success(self, mocker):
+    def test_login_serializer_success(self, mock_celery_task):
         """
         Verify that a user can successfully log in with valid credentials.
         """
         user = NormalUserFactory(is_active=True, is_email_verified=True, password="StrongPassword@123")
-        mocker.patch('users.serializers.auth.send_user_verification_otp.delay')
+        mock_celery_task('users.serializers.auth.send_user_verification_otp')
         
         data = {
             "username": user.username,

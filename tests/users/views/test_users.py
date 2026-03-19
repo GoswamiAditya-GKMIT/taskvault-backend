@@ -91,11 +91,11 @@ class TestUserCreateAPI:
     Test suite for user creation and invitations.
     """
 
-    def test_create_user_tenant_admin_success(self, tenantadmin_client, mocker):
+    def test_create_user_tenant_admin_success(self, tenantadmin_client, mock_celery_task):
         """
         Verify that a Tenant Admin can create a new user within their organization.
         """
-        mock_send = mocker.patch('users.views.user.send_verification_link_email.delay')
+        mock_send = mock_celery_task('users.views.user.send_verification_link_email')
         url = reverse('user-list-create')
         payload = UserPayloadFactory()
         

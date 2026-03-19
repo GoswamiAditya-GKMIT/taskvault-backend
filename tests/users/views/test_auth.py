@@ -12,11 +12,11 @@ class TestRegistrationAPI:
     Test suite for user self-registration behavior.
     """
 
-    def test_registration_success(self, api_client, mocker):
+    def test_registration_success(self, api_client, mock_celery_task):
         """
         Verify that a user can successfully register with valid data and an active organization.
         """
-        mock_send = mocker.patch('users.views.auth.send_verification_link_email.delay')
+        mock_send = mock_celery_task('users.views.auth.send_verification_link_email')
         org = OrganizationFactory(is_active=True)
         url = reverse('register', kwargs={'tenant_id': org.id})
         payload = UserPayloadFactory()
@@ -88,11 +88,11 @@ class TestLoginAPI:
     Test suite for authentication (Login) behavior.
     """
 
-    def test_login_success_triggers_otp(self, api_client, mocker):
+    def test_login_success_triggers_otp(self, api_client, mock_celery_task):
         """
         Verify that valid credentials result in an OTP being sent.
         """
-        mock_send = mocker.patch('users.serializers.auth.send_user_verification_otp.delay')
+        mock_send = mock_celery_task('users.serializers.auth.send_user_verification_otp')
         user = NormalUserFactory(is_active=True, is_email_verified=True)
         # Force password to match factory expected usage if needed, but NormalUserFactory uses 'testpass123' by default
         url = reverse('login')
@@ -294,11 +294,11 @@ class TestResendAuthAPI:
     Test suite for resending authentication codes and links.
     """
 
-    def test_resend_login_otp_success(self, api_client, mocker):
+    def test_resend_login_otp_success(self, api_client, mock_celery_task):
         """
         Verify that a user can resend their login OTP if a session exists.
         """
-        mock_send = mocker.patch('users.views.auth.send_user_verification_otp.delay')
+        mock_send = mock_celery_task('users.views.auth.send_user_verification_otp')
         user = NormalUserFactory(is_active=True, is_email_verified=True)
         # Session must exist
         cache.set(f"login_otp:{user.id}", {"otp": "111111"}, timeout=300)
@@ -312,11 +312,11 @@ class TestResendAuthAPI:
         assert "new OTP has been sent" in response.data["message"]
         mock_send.assert_called_once()
 
-    def test_resend_verification_link_success(self, api_client, mocker):
+    def test_resend_verification_link_success(self, api_client, mock_celery_task):
         """
         Verify that an unverified user can request a fresh verification link.
         """
-        mock_send = mocker.patch('users.views.auth.send_verification_link_email.delay')
+        mock_send = mock_celery_task('users.views.auth.send_verification_link_email')
         user = NormalUserFactory(is_active=False, is_email_verified=False)
         
         url = reverse('resend_verification_link')

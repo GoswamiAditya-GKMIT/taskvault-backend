@@ -15,10 +15,14 @@ def mock_send_mail(mocker):
     """ Mocks Django's send_mail helper. """
     return mocker.patch('django.core.mail.send_mail')
 
-@pytest.fixture
-def mock_redis_cache(mocker):
-    """ Mocks Django's default caching mechanism. """
-    return mocker.patch('django.core.cache.cache')
+# @pytest.fixture
+# def mock_cache(mocker):
+#     """ 
+#     Mocks Django's default caching mechanism for explicit call verification. 
+#     Currently unused because LocMemCache is enforced globally in conftest.py, 
+#     which satisfies the requirements for most state-based tests.
+#     """
+#     return mocker.patch('django.core.cache.cache')
 
 @pytest.fixture
 def mock_razorpay_client(mocker):
