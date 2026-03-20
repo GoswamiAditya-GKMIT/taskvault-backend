@@ -5,8 +5,8 @@
 set -e
 
 # Wait for PostgreSQL to be ready before any service starts
-echo "[entrypoint] Waiting for PostgreSQL at ${POSTGRES_HOST}:5432..."
-until nc -z "${POSTGRES_HOST}" 5432; do
+echo "[entrypoint] Waiting for PostgreSQL at ${POSTGRES_HOST}:${POSTGRES_PORT:-5432}..."
+until nc -z "${POSTGRES_HOST}" "${POSTGRES_PORT:-5432}"; do
   sleep 1
 done
 echo "[entrypoint] PostgreSQL is ready."
