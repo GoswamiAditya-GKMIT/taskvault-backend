@@ -2,9 +2,9 @@ name: Deploy to EC2
 
 on:
   push:
-    branches: [feature/ci-cd]
+    branches: [feature/rds-setup]
   pull_request:
-    branches: [feature/ci-cd]
+    branches: [feature/rds-setup]
     types: [closed]
 
 env:
@@ -224,9 +224,9 @@ jobs:
             fi
 
             cd "$APP_DIR"
-            git fetch origin feature/ci-cd
-            git checkout feature/ci-cd
-            git reset --hard origin/feature/ci-cd
+            git fetch origin feature/rds-setup
+            git checkout feature/rds-setup
+            git reset --hard origin/feature/rds-setup
 
             # ─── 3. Write production .env ────────────────────────────────────
             echo "==> Writing .env..."
