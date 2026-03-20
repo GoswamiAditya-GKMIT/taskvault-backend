@@ -71,7 +71,7 @@ jobs:
           RAZORPAY_KEY_ID: rzp_test_fake
           RAZORPAY_KEY_SECRET: fake_secret
         run: |
-          pytest --no-cov
+          pytest --cov-fail-under=90
 
   # ─────────────────────────────────────────────────────────────────────────────
   # JOB 1 — Build and push Docker image to GHCR
