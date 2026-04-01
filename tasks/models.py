@@ -2,11 +2,26 @@ import uuid
 from django.db import models
 from django.conf import settings
 from core.choices import TaskStatusChoices, TaskPriorityChoices
+from users.models import Organization
 
 User = settings.AUTH_USER_MODEL
 
 class Task(models.Model):
     id = models.UUIDField(primary_key=True , default=uuid.uuid4 , editable=False)
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="tasks"
+    )
+
+    parent_task = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="subtasks"
+    )
 
     owner = models.ForeignKey(
         User,
@@ -46,8 +61,6 @@ class Task(models.Model):
         indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["priority"]),
-            models.Index(fields=["owner"]),
-            models.Index(fields=["assignee"]),
             models.Index(fields=["created_at"]),
         ]
 
@@ -58,6 +71,12 @@ class Task(models.Model):
 # task history model 
 class TaskHistory(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="task_history"
+    )
 
     task = models.ForeignKey(
         Task,
@@ -106,8 +125,6 @@ class TaskHistory(models.Model):
     class Meta:
         db_table = "tasks_history"
         indexes = [
-            models.Index(fields=["task"]),
-            models.Index(fields=["actor"]),
             models.Index(fields=["created_at"]),
         ]
 
@@ -121,6 +138,12 @@ class TaskHistory(models.Model):
 # comment model
 class Comment(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="task_comments"
+    )
 
     task = models.ForeignKey(
         Task,
@@ -146,8 +169,6 @@ class Comment(models.Model):
     class Meta:
         db_table = "comments"
         indexes = [
-            models.Index(fields=["task"]),
-            models.Index(fields=["user"]),
             models.Index(fields=["created_at"]),
         ]
 

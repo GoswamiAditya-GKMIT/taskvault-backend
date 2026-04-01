@@ -23,3 +23,8 @@ env/
 .vscode/  # VS Code config (if project specific)
 
 .pytest_cache/
+celerybeat-schedule*
+.vscode/
+logs/
+celerybeat-schedule*
+/scripts

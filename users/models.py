@@ -6,8 +6,9 @@ from core.choices import UserRoleChoices
 
 class Organization(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=150)
+    name = models.CharField(max_length=150, unique=True)
     is_active = models.BooleanField(default=True)
+    is_premium = models.BooleanField(default=False, db_index=True)  # Premium subscription flag
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -15,6 +16,11 @@ class Organization(models.Model):
 
     class Meta:
         db_table = "organizations"
+
+    def save(self, *args, **kwargs):
+        if self.name:
+            self.name = " ".join(self.name.split())
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -46,13 +52,18 @@ class User(AbstractUser):
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True , blank=True)
 
+    DELETED_BY_CHOICES = (
+        ('self', 'Self'),
+        ('admin', 'Admin'),
+    )
+    deleted_by = models.CharField(max_length=10, choices=DELETED_BY_CHOICES, null=True, blank=True)
+
     REQUIRED_FIELDS = ["email"]
     USERNAME_FIELD = "username"
 
     class Meta:
         db_table = "users"
         indexes = [
-            models.Index(fields=["role"]),
             models.Index(fields=["created_at"]),
         ]
 

@@ -22,6 +22,7 @@ def update_task(task, *, user, status=None, priority=None, deadline=None):
 
     if old_status != task.status or old_priority != task.priority:
         TaskHistory.objects.create(
+            organization=task.organization,
             task=task,
             actor=user,
             old_status=old_status,

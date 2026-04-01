@@ -20,7 +20,7 @@ def custom_api_exception_handler(exc, context):
             {
                 "status": "error",
                 "message": "Internal server error",
-                "errors": {
+                "error": {
                     "detail": str(exc),
                 },
             },
@@ -41,7 +41,7 @@ def custom_api_exception_handler(exc, context):
     custom_response_data = {
         "status": "error",
         "message": message,
-        "errors": response.data,
+        "error": response.data,
     }
 
     response.data = custom_response_data
@@ -55,7 +55,7 @@ def custom_404_handler(request, exception):
         {
             "status": "error",
             "message": "Resource not found",
-            "errors": {
+            "error": {
                 "detail": "The requested resources does not exist."
             },
         },
